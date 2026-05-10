@@ -60,10 +60,17 @@ start_service() {
 
     echo "Starting dashboard in background..."
     cd "$SCRIPT_DIR"
-    nohup "$VENV_DIR/bin/python" dashboard_server.py --service >> "$LOG_FILE" 2>&1 &
+    nohup "$VENV_DIR/bin/python" dashboard_server.py --service-worker >> "$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
-    echo "Dashboard started (PID: $(cat "$PID_FILE"))"
-    echo "Log file: $LOG_FILE"
+    sleep 2
+    if kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+        echo "Dashboard started (PID: $(cat "$PID_FILE"))"
+        echo "Log file: $LOG_FILE"
+    else
+        echo "Error: Dashboard failed to start. Check $LOG_FILE"
+        rm -f "$PID_FILE"
+        return 1
+    fi
 }
 
 # Stop background process
@@ -139,7 +146,7 @@ After=network.target
 Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$SCRIPT_DIR
-ExecStart=$PYTHON_PATH dashboard_server.py --service
+ExecStart=$PYTHON_PATH dashboard_server.py --service-worker
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
