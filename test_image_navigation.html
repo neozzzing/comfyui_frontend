@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Image Navigation with Arrow Keys</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .instructions {
+            background: #2a2a2a;
+            padding: 15px;
+            margin: 20px auto;
+            max-width: 600px;
+            border-radius: 8px;
+        }
+
+        .instructions h2 {
+            margin-top: 0;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .gallery-item {
+            background: #2a2a2a;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .gallery-item:hover {
+            transform: scale(1.05);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .gallery-item-info {
+            padding: 10px;
+            text-align: center;
+        }
+
+        /* Fullscreen overlay */
+        .fullscreen-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .fullscreen-overlay.active {
+            display: flex;
+        }
+
+        .fullscreen-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fullscreen-image {
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+        }
+
+        .fullscreen-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 40px;
+            color: white;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.5);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .fullscreen-close:hover {
+            background: rgba(255, 0, 0, 0.7);
+        }
+
+        .nav-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 50px;
+            color: white;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.5);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            z-index: 10000;
+        }
+
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .nav-button.prev {
+            left: 20px;
+        }
+
+        .nav-button.next {
+            right: 20px;
+        }
+
+        .image-counter {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-size: 16px;
+            z-index: 10000;
+        }
+
+        .keyboard-hint {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 100, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+            z-index: 10000;
+        }
+    </style>
+</head>
+<body>
+    <h1>🖼️ Image Navigation Test</h1>
+    
+    <div class="instructions">
+        <h2>Instructions:</h2>
+        <ul>
+            <li><strong>Click</strong> any image to view in fullscreen</li>
+            <li>Use <strong>Left Arrow (←)</strong> to go to previous image</li>
+            <li>Use <strong>Right Arrow (→)</strong> to go to next image</li>
+            <li>Press <strong>Escape</strong> or click <strong>X</strong> to close</li>
+            <li>Click navigation arrows on sides to navigate</li>
+        </ul>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
+    <!-- Fullscreen overlay -->
+    <div class="fullscreen-overlay" id="fullscreenOverlay">
+        <div class="fullscreen-close" id="closeBtn">×</div>
+        <div class="keyboard-hint">Use ← → arrow keys to navigate</div>
+        <div class="nav-button prev" id="prevBtn">‹</div>
+        <div class="fullscreen-content">
+            <img class="fullscreen-image" id="fullscreenImage" src="" alt="Fullscreen image">
+        </div>
+        <div class="nav-button next" id="nextBtn">›</div>
+        <div class="image-counter" id="imageCounter">1 / 10</div>
+    </div>
+
+    <script>
+        // Generate sample images using placeholder service
+        const images = [];
+        for (let i = 1; i <= 10; i++) {
+            images.push({
+                id: i,
+                thumbnail: `https://picsum.photos/200/200?random=${i}`,
+                full: `https://picsum.photos/800/600?random=${i}`,
+                title: `Image ${i}`
+            });
+        }
+
+        let currentIndex = 0;
+
+        // Render gallery
+        const gallery = document.getElementById('gallery');
+        images.forEach((img, index) => {
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+            item.innerHTML = `
+                <img src="${img.thumbnail}" alt="${img.title}">
+                <div class="gallery-item-info">${img.title}</div>
+            `;
+            item.addEventListener('click', () => openFullscreen(index));
+            gallery.appendChild(item);
+        });
+
+        // Fullscreen elements
+        const overlay = document.getElementById('fullscreenOverlay');
+        const fullscreenImage = document.getElementById('fullscreenImage');
+        const closeBtn = document.getElementById('closeBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const imageCounter = document.getElementById('imageCounter');
+
+        // Open fullscreen
+        function openFullscreen(index) {
+            currentIndex = index;
+            showImage();
+            overlay.classList.add('active');
+        }
+
+        // Close fullscreen
+        function closeFullscreen() {
+            overlay.classList.remove('active');
+        }
+
+        // Show current image
+        function showImage() {
+            const img = images[currentIndex];
+            fullscreenImage.src = img.full;
+            imageCounter.textContent = `${currentIndex + 1} / ${images.length}`;
+            
+            // Update navigation button visibility
+            prevBtn.style.opacity = currentIndex === 0 ? '0.3' : '1';
+            nextBtn.style.opacity = currentIndex === images.length - 1 ? '0.3' : '1';
+        }
+
+        // Navigate to previous image
+        function showPrevious() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                showImage();
+            }
+        }
+
+        // Navigate to next image
+        function showNext() {
+            if (currentIndex < images.length - 1) {
+                currentIndex++;
+                showImage();
+            }
+        }
+
+        // Event listeners for buttons
+        closeBtn.addEventListener('click', closeFullscreen);
+        prevBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showPrevious();
+        });
+        nextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showNext();
+        });
+
+        // Click on overlay to close (but not on image)
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeFullscreen();
+            }
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (!overlay.classList.contains('active')) return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'Left':
+                    e.preventDefault();
+                    showPrevious();
+                    console.log('Left arrow pressed - Previous image');
+                    break;
+                case 'ArrowRight':
+                case 'Right':
+                    e.preventDefault();
+                    showNext();
+                    console.log('Right arrow pressed - Next image');
+                    break;
+                case 'Escape':
+                case 'Esc':
+                    e.preventDefault();
+                    closeFullscreen();
+                    console.log('Escape pressed - Close fullscreen');
+                    break;
+            }
+        });
+
+        // Prevent default arrow key scrolling when overlay is open
+        window.addEventListener('keydown', (e) => {
+            if (overlay.classList.contains('active') && 
+                (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault();
+            }
+        });
+
+        console.log('Test loaded! Click any image to test keyboard navigation.');
+        console.log('Total images:', images.length);
+    </script>
+</body>
+</html>

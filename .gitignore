@@ -1,0 +1,16 @@
+config.ini.real
+.venv/
+__pycache__/
+dashboard_server.log
+dashboard_server.pid
+gallery/
+thumbnails/
+nianna_test.py
+
+# Keep folders but ignore their contents
+history/*
+!history/.gitkeep
+output/*
+!output/.gitkeep
+workflows/*
+!workflows/.gitkeep
