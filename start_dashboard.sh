@@ -60,8 +60,7 @@ start_service() {
 
     echo "Starting dashboard in background..."
     cd "$SCRIPT_DIR"
-    activate_venv
-    nohup python dashboard_server.py --service >> "$LOG_FILE" 2>&1 &
+    nohup "$VENV_DIR/bin/python" dashboard_server.py --service >> "$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
     echo "Dashboard started (PID: $(cat "$PID_FILE"))"
     echo "Log file: $LOG_FILE"
