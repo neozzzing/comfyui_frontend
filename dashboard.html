@@ -68,6 +68,52 @@
             padding-bottom: 10px;
         }
 
+        .prompt-assemble-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .prompt-assemble-row label {
+            min-width: 80px;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #555;
+            margin: 0;
+        }
+        .prompt-assemble-row select {
+            width: 120px;
+            padding: 6px 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.85em;
+        }
+        .prompt-assemble-row input[type="text"] {
+            flex: 1;
+            padding: 6px 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.85em;
+        }
+        .prompt-assemble-row select:focus,
+        .prompt-assemble-row input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .prompt-assemble-row .btn-add {
+            padding: 5px 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+        .prompt-assemble-row .btn-add:hover {
+            background: #5a6fd6;
+        }
+
         .form-group {
             margin-bottom: 20px;
         }
@@ -1051,6 +1097,52 @@
                 </div>
             </div>
 
+            <!-- Prompt Assemble -->
+            <div class="card">
+                <h2>🧩 Prompt Assemble</h2>
+                <div id="prompt-assemble-container">
+                    <div class="prompt-assemble-row" data-category="header">
+                        <label>Header</label>
+                        <select onchange="onPromptPartSelect(this, 'header')"><option value="">--</option></select>
+                        <input type="text" placeholder="Header prompt...">
+                        <button class="btn-add" onclick="addPromptPart('header')">Add</button>
+                    </div>
+                    <div class="prompt-assemble-row" data-category="characters">
+                        <label>Characters</label>
+                        <select onchange="onPromptPartSelect(this, 'characters')"><option value="">--</option></select>
+                        <input type="text" placeholder="Characters prompt...">
+                        <button class="btn-add" onclick="addPromptPart('characters')">Add</button>
+                    </div>
+                    <div class="prompt-assemble-row" data-category="outfit">
+                        <label>Outfit</label>
+                        <select onchange="onPromptPartSelect(this, 'outfit')"><option value="">--</option></select>
+                        <input type="text" placeholder="Outfit prompt...">
+                        <button class="btn-add" onclick="addPromptPart('outfit')">Add</button>
+                    </div>
+                    <div class="prompt-assemble-row" data-category="scene">
+                        <label>Scene</label>
+                        <select onchange="onPromptPartSelect(this, 'scene')"><option value="">--</option></select>
+                        <input type="text" placeholder="Scene prompt...">
+                        <button class="btn-add" onclick="addPromptPart('scene')">Add</button>
+                    </div>
+                    <div class="prompt-assemble-row" data-category="camera">
+                        <label>Camera</label>
+                        <select onchange="onPromptPartSelect(this, 'camera')"><option value="">--</option></select>
+                        <input type="text" placeholder="Camera prompt...">
+                        <button class="btn-add" onclick="addPromptPart('camera')">Add</button>
+                    </div>
+                    <div class="prompt-assemble-row" data-category="footer">
+                        <label>Footer</label>
+                        <select onchange="onPromptPartSelect(this, 'footer')"><option value="">--</option></select>
+                        <input type="text" placeholder="Footer prompt...">
+                        <button class="btn-add" onclick="addPromptPart('footer')">Add</button>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; text-align: right;">
+                    <button class="btn-add" onclick="assembleAllPrompts()" style="padding: 8px 20px; font-size: 0.9em;">📋 Assemble All</button>
+                </div>
+            </div>
+
             <!-- Image Upload -->
             <div class="card">
                 <h2>🖼️ Image Input (Optional)</h2>
@@ -1241,6 +1333,7 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadWorkflows();
+            loadPromptParts();
             startStatusMonitoring();
             loadGallery();
             checkLocalMode(); // Check if local mode is available
@@ -1517,6 +1610,76 @@
                 btn.innerHTML = originalText;
             }
         });
+
+        // ── Prompt Assemble ──────────────────────────────────────
+        let promptPartsData = {};
+
+        async function loadPromptParts() {
+            try {
+                const response = await fetch(`${API_BASE}/api/prompt-parts`);
+                const data = await response.json();
+                if (data.success) {
+                    promptPartsData = data.parts;
+                    const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer'];
+                    categories.forEach(cat => {
+                        const row = document.querySelector(`.prompt-assemble-row[data-category="${cat}"]`);
+                        if (!row) return;
+                        const select = row.querySelector('select');
+                        select.innerHTML = '<option value="">--</option>';
+                        (data.parts[cat] || []).forEach((entry, idx) => {
+                            const opt = document.createElement('option');
+                            opt.value = idx;
+                            opt.textContent = entry.label;
+                            select.appendChild(opt);
+                        });
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to load prompt parts:', e);
+            }
+        }
+
+        function onPromptPartSelect(selectEl, category) {
+            const row = selectEl.closest('.prompt-assemble-row');
+            const textInput = row.querySelector('input[type="text"]');
+            const idx = selectEl.value;
+            if (idx === '' || !promptPartsData[category]) {
+                textInput.value = '';
+                return;
+            }
+            const entry = promptPartsData[category][parseInt(idx)];
+            if (entry) {
+                textInput.value = entry.text;
+            }
+        }
+
+        function addPromptPart(category) {
+            const row = document.querySelector(`.prompt-assemble-row[data-category="${category}"]`);
+            const textInput = row.querySelector('input[type="text"]');
+            const text = textInput.value.trim();
+            if (!text) return;
+            const promptArea = document.getElementById('prompt-input');
+            const current = promptArea.value.trim();
+            if (current) {
+                promptArea.value = current + ' ' + text;
+            } else {
+                promptArea.value = text;
+            }
+        }
+
+        function assembleAllPrompts() {
+            const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer'];
+            const parts = [];
+            categories.forEach(cat => {
+                const row = document.querySelector(`.prompt-assemble-row[data-category="${cat}"]`);
+                const textInput = row.querySelector('input[type="text"]');
+                const text = textInput.value.trim();
+                if (text) parts.push(text);
+            });
+            if (parts.length > 0) {
+                document.getElementById('prompt-input').value = parts.join(' ');
+            }
+        }
 
         // Load available workflows
         async function loadWorkflows() {

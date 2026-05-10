@@ -1,0 +1,5 @@
+[outdoor]
+outdoor scenery, natural background, sunny day,
+
+[studio]
+studio background, professional lighting, clean backdrop,

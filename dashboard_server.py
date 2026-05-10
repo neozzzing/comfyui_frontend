@@ -522,6 +522,37 @@ class ComfyUIClient:
 # Initialize ComfyUI client
 comfy_client = ComfyUIClient(COMFYUI_URL)
 
+# ── Prompt directory ──
+PROMPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompt')
+
+
+@app.route('/api/prompt-parts', methods=['GET'])
+def get_prompt_parts():
+    """Get all prompt part files for the Prompt Assemble feature"""
+    categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer']
+    result = {}
+    for cat in categories:
+        filepath = os.path.join(PROMPT_DIR, f'prompt-{cat}.txt')
+        entries = []
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            current_label = None
+            current_text = []
+            for line in content.split('\n'):
+                stripped = line.strip()
+                if stripped.startswith('[') and stripped.endswith(']'):
+                    if current_label is not None:
+                        entries.append({'label': current_label, 'text': '\n'.join(current_text).strip()})
+                    current_label = stripped[1:-1]
+                    current_text = []
+                elif current_label is not None:
+                    current_text.append(line)
+            if current_label is not None:
+                entries.append({'label': current_label, 'text': '\n'.join(current_text).strip()})
+        result[cat] = entries
+    return jsonify({'success': True, 'parts': result})
+
 
 @app.route('/api/workflows', methods=['GET'])
 def get_workflows():

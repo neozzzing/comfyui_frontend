@@ -1,0 +1,5 @@
+[portrait]
+close-up portrait, face focused, shallow depth of field,
+
+[full body]
+full body shot, wide angle,
