@@ -1138,8 +1138,9 @@
                         <button class="btn-add" onclick="addPromptPart('footer')">Add</button>
                     </div>
                 </div>
-                <div style="margin-top: 10px; text-align: right;">
+                <div style="margin-top: 10px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button class="btn-add" onclick="assembleAllPrompts()" style="padding: 8px 20px; font-size: 0.9em;">📋 Assemble All</button>
+                    <button class="btn" id="submit-btn" style="padding: 8px 20px; font-size: 0.9em; margin: 0;">▶️ RUN</button>
                 </div>
             </div>
 
@@ -1159,9 +1160,6 @@
                     <div id="image-preview" style="margin-top: 15px;"></div>
                 </div>
 
-                <button class="btn" id="submit-btn">
-                    ▶️ RUN
-                </button>
             </div>
 
             <!-- Status Monitor -->
