@@ -1,5 +1,0 @@
-[casual]
-wearing casual clothes, t-shirt, jeans,
-
-[formal]
-wearing elegant formal dress, high heels,
