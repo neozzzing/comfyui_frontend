@@ -55,10 +55,6 @@ Fully responsive design that adapts to smaller screens with stacked cards.
 
 3. **Configure ComfyUI server:**
    
-   Copy the example config and edit with your real settings:
-   ```bash
-   cp config.ini config.ini.real
-   ```
    Edit `config.ini` to set your ComfyUI server URL:
    ```ini
    [comfyui]
@@ -284,7 +280,6 @@ To access from mobile devices on same network:
   openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
   ```
 - Designed primarily for **local/trusted network** use
-- Store real credentials in `config.ini.real` (gitignored)
 
 ## Contributing
 
