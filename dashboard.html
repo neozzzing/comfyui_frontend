@@ -2730,19 +2730,44 @@
         function copyPromptText(elementId) {
             const el = document.getElementById(elementId);
             if (!el) return;
-            navigator.clipboard.writeText(el.textContent).then(() => {
-                showNotification('Copied to clipboard', 'success');
-            }).catch(() => {
-                // Fallback for older browsers
-                const range = document.createRange();
-                range.selectNodeContents(el);
-                const sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-                document.execCommand('copy');
-                sel.removeAllRanges();
-                showNotification('Copied to clipboard', 'success');
-            });
+            const text = el.textContent;
+
+            // Primary: modern Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('Copied to clipboard', 'success');
+                }).catch((err) => {
+                    console.warn('navigator.clipboard failed, falling back:', err);
+                    copyFallback(text);
+                });
+            } else {
+                copyFallback(text);
+            }
+        }
+
+        // Fallback: select text + execCommand('copy') for browsers that block Clipboard API
+        function copyFallback(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            textarea.style.top = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                const success = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (success) {
+                    showNotification('Copied to clipboard', 'success');
+                } else {
+                    showNotification('Failed to copy', 'error');
+                }
+            } catch (err) {
+                document.body.removeChild(textarea);
+                console.error('Fallback copy failed:', err);
+                showNotification('Failed to copy', 'error');
+            }
         }
 
         // Export workflow as JSON
