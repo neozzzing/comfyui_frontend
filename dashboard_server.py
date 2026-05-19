@@ -289,11 +289,19 @@ if config and config.has_option('comfyui', 'local_path'):
     else:
         print("ℹ️  Local ComfyUI path not configured")
 
-WORKFLOW_DIR = "workflows"
-HISTORY_DIR = "history"
-OUTPUT_DIR = "output"  # Still keep for backward compatibility
-GALLERY_DIR = "gallery"  # Gallery storage directory
-THUMBNAIL_DIR = "thumbnails"  # Thumbnail cache directory
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _resolve_dir(path):
+    """Resolve a directory path: absolute paths are used as-is, relative paths are resolved from the script directory."""
+    if os.path.isabs(path):
+        return path
+    return os.path.join(_SCRIPT_DIR, path)
+
+WORKFLOW_DIR = _resolve_dir(config.get('paths', 'workflows_dir', fallback='workflows') if config and config.has_section('paths') else 'workflows')
+HISTORY_DIR = _resolve_dir(config.get('paths', 'history_dir', fallback='history') if config and config.has_section('paths') else 'history')
+OUTPUT_DIR = _resolve_dir(config.get('paths', 'output_dir', fallback='output') if config and config.has_section('paths') else 'output')
+GALLERY_DIR = _resolve_dir(config.get('paths', 'gallery_dir', fallback='gallery') if config and config.has_section('paths') else 'gallery')
+THUMBNAIL_DIR = _resolve_dir(config.get('paths', 'thumbnails_dir', fallback='thumbnails') if config and config.has_section('paths') else 'thumbnails')
 THUMBNAIL_SIZE = (300, 300)  # Max thumbnail dimensions
 
 # Dashboard port
@@ -523,7 +531,7 @@ class ComfyUIClient:
 comfy_client = ComfyUIClient(COMFYUI_URL)
 
 # ── Prompt directory ──
-PROMPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompt')
+PROMPT_DIR = _resolve_dir(config.get('paths', 'prompt_dir', fallback='prompt') if config and config.has_section('paths') else 'prompt')
 
 
 @app.route('/api/prompt-parts', methods=['GET'])
