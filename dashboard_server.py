@@ -614,6 +614,125 @@ def upload_workflow():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/editor/files', methods=['GET'])
+def list_editor_files():
+    """List all editable files (workflows, prompt parts, config.ini)"""
+    try:
+        files = []
+        # Workflow files
+        os.makedirs(WORKFLOW_DIR, exist_ok=True)
+        for f in sorted(glob.glob(os.path.join(WORKFLOW_DIR, "*.json"))):
+            files.append({
+                'name': os.path.basename(f),
+                'category': 'workflows',
+                'key': 'workflows/' + os.path.basename(f)
+            })
+        # Prompt part files
+        prompt_categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer']
+        for cat in prompt_categories:
+            filepath = os.path.join(PROMPT_DIR, f'prompt-{cat}.txt')
+            if os.path.exists(filepath):
+                files.append({
+                    'name': f'prompt-{cat}.txt',
+                    'category': 'prompt-parts',
+                    'key': 'prompt/prompt-' + cat + '.txt'
+                })
+        # Config file
+        config_path = os.path.join(_SCRIPT_DIR, 'config.ini')
+        if os.path.exists(config_path):
+            files.append({
+                'name': 'config.ini',
+                'category': 'config',
+                'key': 'config.ini'
+            })
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/editor/read/<path:key>', methods=['GET'])
+def read_editor_file(key):
+    """Read a file content for editing"""
+    try:
+        # Security: prevent directory traversal
+        if '..' in key or key.startswith('/'):
+            return jsonify({'success': False, 'error': 'Invalid path'}), 400
+
+        if key.startswith('workflows/'):
+            filename = key[len('workflows/'):]
+            filepath = os.path.join(WORKFLOW_DIR, filename)
+        elif key.startswith('prompt/'):
+            filename = key[len('prompt/'):]
+            filepath = os.path.join(PROMPT_DIR, filename)
+        elif key == 'config.ini':
+            filepath = os.path.join(_SCRIPT_DIR, 'config.ini')
+        else:
+            return jsonify({'success': False, 'error': 'Unknown file category'}), 400
+
+        # Additional safety check
+        filepath = os.path.abspath(filepath)
+        allowed_dirs = [os.path.abspath(WORKFLOW_DIR), os.path.abspath(PROMPT_DIR), os.path.abspath(_SCRIPT_DIR)]
+        if not any(filepath.startswith(d) for d in allowed_dirs):
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+        if not os.path.exists(filepath):
+            return jsonify({'success': False, 'error': 'File not found'}), 404
+
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        return jsonify({'success': True, 'content': content, 'key': key})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/editor/save/<path:key>', methods=['POST'])
+def save_editor_file(key):
+    """Save file content from editor"""
+    try:
+        # Security: prevent directory traversal
+        if '..' in key or key.startswith('/'):
+            return jsonify({'success': False, 'error': 'Invalid path'}), 400
+
+        data = request.json
+        content = data.get('content', '')
+        if content is None:
+            content = ''
+
+        if key.startswith('workflows/'):
+            filename = key[len('workflows/'):]
+            # Sanitize filename
+            safe_name = os.path.basename(filename).replace('..', '').strip()
+            if not safe_name or not safe_name.endswith('.json'):
+                return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+            filepath = os.path.join(WORKFLOW_DIR, safe_name)
+        elif key.startswith('prompt/'):
+            filename = key[len('prompt/'):]
+            safe_name = os.path.basename(filename).replace('..', '').strip()
+            if not safe_name:
+                return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+            filepath = os.path.join(PROMPT_DIR, safe_name)
+        elif key == 'config.ini':
+            filepath = os.path.join(_SCRIPT_DIR, 'config.ini')
+        else:
+            return jsonify({'success': False, 'error': 'Unknown file category'}), 400
+
+        # Additional safety check
+        filepath = os.path.abspath(filepath)
+        allowed_dirs = [os.path.abspath(WORKFLOW_DIR), os.path.abspath(PROMPT_DIR), os.path.abspath(_SCRIPT_DIR)]
+        if not any(filepath.startswith(d) for d in allowed_dirs):
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        logging.info(f"File saved via editor: {filepath}")
+        return jsonify({'success': True, 'path': filepath})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/workflow/<filename>', methods=['GET'])
 def get_workflow(filename):
     """Get a specific workflow configuration"""

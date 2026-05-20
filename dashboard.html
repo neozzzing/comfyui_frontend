@@ -1034,6 +1034,7 @@
             <button class="tab active" onclick="switchTab('workflow')">⚙️ Workflow</button>
             <button class="tab" onclick="switchTab('gallery')">🖼️ Gallery</button>
             <button class="tab" onclick="switchTab('history')">📜 History</button>
+            <button class="tab" onclick="switchTab('editor')">📝 File Editor</button>
         </div>
 
         <!-- Workflow Tab Content -->
@@ -1101,7 +1102,7 @@
 
             <!-- Prompt Assemble -->
             <div class="card">
-                <h2>🧩 Prompt Assemble <button onclick="reloadPromptParts()" style="font-size:0.6em;padding:2px 8px;cursor:pointer;">🔄 Reload</button></h2>
+                <h2>🧩 Prompt Assemble <button onclick="reloadPromptParts()" style="font-size:0.6em;padding:2px 8px;cursor:pointer;">🔄 Reload</button> <button onclick="switchTab('editor')" style="font-size:0.6em;padding:2px 8px;cursor:pointer;" title="Open File Editor">📝 Edit</button></h2>
                 <div id="prompt-assemble-status" style="font-size:0.8em;color:#888;margin-bottom:6px;"></div>
                 <div id="prompt-assemble-container">
                     <div class="prompt-assemble-row" data-category="header">
@@ -1292,6 +1293,25 @@
             </div>
         </div>
         <!-- End History Tab -->
+
+        <!-- File Editor Tab Content -->
+        <div id="editor-tab" class="tab-content">
+            <div class="card">
+                <h2>📝 File Editor</h2>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <select id="editor-file-select" style="flex: 1; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                        <option value="">-- Select a file --</option>
+                    </select>
+                    <span id="editor-file-info" style="font-size: 0.85em; color: #888;"></span>
+                </div>
+                <textarea id="editor-content" style="width: 100%; min-height: 500px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85em; padding: 15px; border: 2px solid #e0e0e0; border-radius: 8px; resize: vertical; line-height: 1.5; box-sizing: border-box;" spellcheck="false"></textarea>
+                <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="switchTab('workflow')" style="padding: 10px 24px; background: #e0e0e0; color: #333; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Exit</button>
+                    <button onclick="saveEditorFile()" id="editor-save-btn" style="padding: 10px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Save</button>
+                </div>
+            </div>
+        </div>
+        <!-- End File Editor Tab -->
 
     </div>
 
@@ -2504,7 +2524,7 @@
             document.getElementById(`${tabName}-tab`).classList.add('active');
 
             // Update page title with tab name
-            const tabLabels = { workflow: 'Workflow', gallery: 'Gallery', history: 'History' };
+            const tabLabels = { workflow: 'Workflow', gallery: 'Gallery', history: 'History', editor: 'File Editor' };
             const label = tabLabels[tabName] || tabName;
             document.title = `${label} - ComfyUI Dashboard`;
 
@@ -2513,6 +2533,8 @@
                 loadHistory();
             } else if (tabName === 'gallery') {
                 loadGalleryItems();
+            } else if (tabName === 'editor') {
+                loadEditorFiles();
             }
         }
 
@@ -3562,6 +3584,130 @@
                 showNotification(`Found ${filtered.length} item(s)`, 'success');
             }
         }
+
+        // ---- File Editor ----
+        let editorDirty = false;
+
+        let editorLoading = false;
+
+        async function loadEditorFiles() {
+            try {
+                const res = await fetch('/api/editor/files');
+                const data = await res.json();
+                if (!data.success) {
+                    showNotification('Failed to load file list: ' + data.error, 'error');
+                    return;
+                }
+                const select = document.getElementById('editor-file-select');
+                select.innerHTML = '<option value="">-- Select a file --</option>';
+                const categories = ['workflows', 'prompt-parts', 'config'];
+                const categoryIcons = { workflows: '⚙️', 'prompt-parts': '📋', config: '⚙️' };
+                let lastCategory = '';
+                for (const file of data.files) {
+                    if (file.category !== lastCategory) {
+                        lastCategory = file.category;
+                        const optGroup = document.createElement('optgroup');
+                        optGroup.label = (categoryIcons[file.category] || '') + ' ' + (lastCategory === 'prompt-parts' ? 'Prompt Parts' : lastCategory === 'config' ? 'Config' : lastCategory.charAt(0).toUpperCase() + lastCategory.slice(1));
+                        optGroup.id = 'editor-optgroup-' + lastCategory;
+                        select.appendChild(optGroup);
+                    }
+                    const opt = document.createElement('option');
+                    opt.value = file.key;
+                    opt.textContent = file.name;
+                    opt.dataset.category = file.category;
+                    const optGroup = document.getElementById('editor-optgroup-' + file.category);
+                    optGroup.appendChild(opt);
+                }
+            } catch (e) {
+                showNotification('Failed to load file list: ' + e.message, 'error');
+            }
+        }
+
+        document.getElementById('editor-file-select').addEventListener('change', async function () {
+            const key = this.value;
+            if (!key) {
+                document.getElementById('editor-content').value = '';
+                document.getElementById('editor-file-info').textContent = '';
+                editorDirty = false;
+                editorLoading = false;
+                this.disabled = false;
+                return;
+            }
+            if (editorLoading) return;
+            editorLoading = true;
+            this.disabled = true;
+            const info = document.getElementById('editor-file-info');
+            const content = document.getElementById('editor-content');
+            info.textContent = '⏳ Loading...';
+            content.style.opacity = '0.4';
+            try {
+                const res = await fetch('/api/editor/read/' + encodeURIComponent(key));
+                const data = await res.json();
+                if (!data.success) {
+                    showNotification('Failed to read file: ' + data.error, 'error');
+                    this.value = '';
+                    return;
+                }
+                // Show filename in info span
+                const fileName = key.split('/').pop();
+                info.textContent = '📄 ' + fileName;
+                content.value = data.content;
+                content.style.opacity = '1';
+                editorDirty = false;
+            } catch (e) {
+                showNotification('Failed to read file: ' + e.message, 'error');
+                this.value = '';
+                info.textContent = '';
+                content.style.opacity = '1';
+            } finally {
+                editorLoading = false;
+                this.disabled = false;
+            }
+        });
+
+        document.getElementById('editor-content').addEventListener('input', function () {
+            editorDirty = true;
+        });
+
+        async function saveEditorFile() {
+            const select = document.getElementById('editor-file-select');
+            const key = select.value;
+            if (!key) {
+                showNotification('No file selected', 'error');
+                return;
+            }
+            const content = document.getElementById('editor-content').value;
+            const btn = document.getElementById('editor-save-btn');
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/editor/save/' + encodeURIComponent(key), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showNotification('Save failed: ' + data.error, 'error');
+                    return;
+                }
+                showNotification('File saved: ' + key, 'success');
+                editorDirty = false;
+            } catch (e) {
+                showNotification('Failed to save: ' + e.message, 'error');
+            } finally {
+                btn.textContent = 'Save';
+                btn.disabled = false;
+            }
+        }
+
+        // Warn before leaving if editor has unsaved changes
+        window.addEventListener('beforeunload', function (e) {
+            if (editorDirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
     </script>
 </body>
 </html>
