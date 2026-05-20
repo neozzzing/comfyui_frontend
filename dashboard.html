@@ -1667,6 +1667,11 @@
                     opt.textContent = entry.label;
                     select.appendChild(opt);
                 });
+                // Auto-select first option for header and footer
+                if ((cat === 'header' || cat === 'footer') && select.options.length > 1) {
+                    select.selectedIndex = 1;
+                    onPromptPartSelect(select, cat);
+                }
             });
             const statusEl = document.getElementById('prompt-assemble-status');
             const loaded = Object.entries(parts).filter(([,v]) => v.length > 0).map(([k,v]) => `${k}(${v.length})`);
