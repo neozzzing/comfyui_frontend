@@ -1123,6 +1123,12 @@
                         <textarea class="prompt-assemble-text" rows="3" placeholder="Outfit prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('outfit')">Add</button>
                     </div>
+                    <div class="prompt-assemble-row" data-category="posture">
+                        <label>Posture</label>
+                        <select onchange="onPromptPartSelect(this, 'posture')"><option value="">--</option></select>
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Posture prompt..."></textarea>
+                        <button class="btn-add" onclick="addPromptPart('posture')">Add</button>
+                    </div>
                     <div class="prompt-assemble-row" data-category="scene">
                         <label>Scene</label>
                         <select onchange="onPromptPartSelect(this, 'scene')"><option value="">--</option></select>
@@ -1134,12 +1140,6 @@
                         <select onchange="onPromptPartSelect(this, 'camera')"><option value="">--</option></select>
                         <textarea class="prompt-assemble-text" rows="3" placeholder="Camera prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('camera')">Add</button>
-                    </div>
-                    <div class="prompt-assemble-row" data-category="posture">
-                        <label>Posture</label>
-                        <select onchange="onPromptPartSelect(this, 'posture')"><option value="">--</option></select>
-                        <textarea class="prompt-assemble-text" rows="3" placeholder="Posture prompt..."></textarea>
-                        <button class="btn-add" onclick="addPromptPart('posture')">Add</button>
                     </div>
                     <div class="prompt-assemble-row" data-category="footer">
                         <label>Footer</label>
