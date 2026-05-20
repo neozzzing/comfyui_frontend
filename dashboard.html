@@ -1135,6 +1135,12 @@
                         <textarea class="prompt-assemble-text" rows="3" placeholder="Camera prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('camera')">Add</button>
                     </div>
+                    <div class="prompt-assemble-row" data-category="posture">
+                        <label>Posture</label>
+                        <select onchange="onPromptPartSelect(this, 'posture')"><option value="">--</option></select>
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Posture prompt..."></textarea>
+                        <button class="btn-add" onclick="addPromptPart('posture')">Add</button>
+                    </div>
                     <div class="prompt-assemble-row" data-category="footer">
                         <label>Footer</label>
                         <select onchange="onPromptPartSelect(this, 'footer')"><option value="">--</option></select>
@@ -1655,7 +1661,7 @@
 
         function _applyPromptParts(parts) {
             promptPartsData = parts;
-            const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer'];
+            const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'posture', 'footer'];
             categories.forEach(cat => {
                 const row = document.querySelector(`.prompt-assemble-row[data-category="${cat}"]`);
                 if (!row) return;
@@ -1718,7 +1724,7 @@
         }
 
         function assembleAllPrompts() {
-            const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer'];
+            const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'posture', 'footer'];
             const parts = [];
             categories.forEach(cat => {
                 const row = document.querySelector(`.prompt-assemble-row[data-category="${cat}"]`);

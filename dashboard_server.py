@@ -537,7 +537,7 @@ PROMPT_DIR = _resolve_dir(config.get('paths', 'prompt_dir', fallback='prompt') i
 @app.route('/api/prompt-parts', methods=['GET'])
 def get_prompt_parts():
     """Get all prompt part files for the Prompt Assemble feature"""
-    categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer']
+    categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'posture', 'footer']
     result = {}
     for cat in categories:
         filepath = os.path.join(PROMPT_DIR, f'prompt-{cat}.txt')
@@ -628,7 +628,7 @@ def list_editor_files():
                 'key': 'workflows/' + os.path.basename(f)
             })
         # Prompt part files
-        prompt_categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer']
+        prompt_categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'posture', 'footer']
         for cat in prompt_categories:
             filepath = os.path.join(PROMPT_DIR, f'prompt-{cat}.txt')
             if os.path.exists(filepath):
@@ -2303,7 +2303,7 @@ def _serve_dashboard():
     """Read dashboard.html and inject prompt parts data inline."""
     import json as _json
     # Build prompt parts data locally
-    categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer']
+    categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'posture', 'footer']
     parts = {}
     for cat in categories:
         filepath = os.path.join(PROMPT_DIR, f'prompt-{cat}.txt')
