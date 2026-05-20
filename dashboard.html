@@ -1711,7 +1711,7 @@
             const promptArea = document.getElementById('prompt-input');
             const current = promptArea.value.trim();
             if (current) {
-                promptArea.value = current + ' ' + text;
+                promptArea.value = current + '\n' + text;
             } else {
                 promptArea.value = text;
             }
@@ -1727,7 +1727,7 @@
                 if (text) parts.push(text);
             });
             if (parts.length > 0) {
-                document.getElementById('prompt-input').value = parts.join(' ');
+                document.getElementById('prompt-input').value = parts.join('\n');
             }
         }
 
