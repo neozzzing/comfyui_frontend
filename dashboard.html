@@ -1096,7 +1096,8 @@
 
             <!-- Prompt Assemble -->
             <div class="card">
-                <h2>🧩 Prompt Assemble</h2>
+                <h2>🧩 Prompt Assemble <button onclick="reloadPromptParts()" style="font-size:0.6em;padding:2px 8px;cursor:pointer;">🔄 Reload</button></h2>
+                <div id="prompt-assemble-status" style="font-size:0.8em;color:#888;margin-bottom:6px;"></div>
                 <div id="prompt-assemble-container">
                     <div class="prompt-assemble-row" data-category="header">
                         <label>Header</label>
@@ -1611,26 +1612,50 @@
 
         async function loadPromptParts() {
             try {
-                const response = await fetch(`${API_BASE}/api/prompt-parts`);
-                const data = await response.json();
-                if (data.success) {
-                    promptPartsData = data.parts;
-                    const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer'];
-                    categories.forEach(cat => {
-                        const row = document.querySelector(`.prompt-assemble-row[data-category="${cat}"]`);
-                        if (!row) return;
-                        const select = row.querySelector('select');
-                        select.innerHTML = '<option value="">--</option>';
-                        (data.parts[cat] || []).forEach((entry, idx) => {
-                            const opt = document.createElement('option');
-                            opt.value = idx;
-                            opt.textContent = entry.label;
-                            select.appendChild(opt);
-                        });
-                    });
+                // Use inline data injected by server (no HTTP call needed)
+                const parts = window.__PROMPT_PARTS__;
+                if (!parts) {
+                    console.warn('No inline prompt parts data found, fetching from API...');
+                    const response = await fetch(`${API_BASE}/api/prompt-parts`, {credentials: 'same-origin'});
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    if (data.success) _applyPromptParts(data.parts);
+                    return;
                 }
+                _applyPromptParts(parts);
             } catch (e) {
                 console.error('Failed to load prompt parts:', e);
+            }
+        }
+
+        function _applyPromptParts(parts) {
+            promptPartsData = parts;
+            const categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer'];
+            categories.forEach(cat => {
+                const row = document.querySelector(`.prompt-assemble-row[data-category="${cat}"]`);
+                if (!row) return;
+                const select = row.querySelector('select');
+                select.innerHTML = '<option value="">-- select --</option>';
+                (parts[cat] || []).forEach((entry, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = idx;
+                    opt.textContent = entry.label;
+                    select.appendChild(opt);
+                });
+            });
+            const statusEl = document.getElementById('prompt-assemble-status');
+            const loaded = Object.entries(parts).filter(([,v]) => v.length > 0).map(([k,v]) => `${k}(${v.length})`);
+            statusEl.textContent = loaded.length ? `Loaded: ${loaded.join(', ')}` : 'No prompt files found';
+        }
+
+        async function reloadPromptParts() {
+            try {
+                const response = await fetch(`${API_BASE}/api/prompt-parts`, {credentials: 'same-origin'});
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.success) _applyPromptParts(data.parts);
+            } catch (e) {
+                console.error('Failed to reload prompt parts:', e);
             }
         }
 

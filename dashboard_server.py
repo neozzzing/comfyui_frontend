@@ -2170,14 +2170,51 @@ def get_gallery_workflow(relative_path):
 
 @app.route('/')
 def index():
-    """Serve the dashboard HTML"""
-    return send_file('dashboard.html')
+    """Serve the dashboard HTML with prompt parts injected"""
+    return _serve_dashboard()
 
 
 @app.route('/gallery')
 def gallery_page():
     """Serve the dashboard HTML with gallery tab active"""
-    return send_file('dashboard.html')
+    return _serve_dashboard()
+
+
+def _serve_dashboard():
+    """Read dashboard.html and inject prompt parts data inline."""
+    import json as _json
+    # Build prompt parts data locally
+    categories = ['header', 'characters', 'outfit', 'scene', 'camera', 'footer']
+    parts = {}
+    for cat in categories:
+        filepath = os.path.join(PROMPT_DIR, f'prompt-{cat}.txt')
+        entries = []
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            current_label = None
+            current_text = []
+            for line in content.split('\n'):
+                stripped = line.strip()
+                if stripped.startswith('[') and stripped.endswith(']'):
+                    if current_label is not None:
+                        entries.append({'label': current_label, 'text': '\n'.join(current_text).strip()})
+                    current_label = stripped[1:-1]
+                    current_text = []
+                elif current_label is not None:
+                    current_text.append(line)
+            if current_label is not None:
+                entries.append({'label': current_label, 'text': '\n'.join(current_text).strip()})
+        parts[cat] = entries
+
+    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dashboard.html')
+    with open(html_path, 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    # Inject prompt parts as inline data before </head>
+    inject = f'<script>window.__PROMPT_PARTS__ = {_json.dumps(parts)};</script>'
+    html = html.replace('</head>', inject + '\n</head>', 1)
+    return Response(html, mimetype='text/html')
 
 
 @app.route('/favicon.svg')
