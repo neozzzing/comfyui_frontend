@@ -6,7 +6,6 @@ dashboard_server.pid
 gallery/
 thumbnails/
 nianna_test.py
-prompt/*.txt
 
 # Keep folders but ignore their contents
 history/*
@@ -15,3 +14,5 @@ output/*
 !output/.gitkeep
 workflows/*
 !workflows/.gitkeep
+prompt/*
+!prompt/.gitkeep

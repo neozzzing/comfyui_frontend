@@ -88,15 +88,20 @@
             border-radius: 6px;
             font-size: 0.85em;
         }
-        .prompt-assemble-row input[type="text"] {
+        .prompt-assemble-row textarea.prompt-assemble-text {
             flex: 1;
+            min-height: 60px;
+            height: 60px;
+            resize: vertical;
             padding: 6px 8px;
             border: 2px solid #e0e0e0;
             border-radius: 6px;
             font-size: 0.85em;
+            font-family: inherit;
         }
         .prompt-assemble-row select:focus,
-        .prompt-assemble-row input:focus {
+        .prompt-assemble-row input:focus,
+        .prompt-assemble-row textarea.prompt-assemble-text:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -1063,7 +1068,7 @@
 
                 <div class="form-group">
                     <label for="prompt-input">Prompt</label>
-                    <textarea id="prompt-input" placeholder="Enter your prompt here...">[nianna] in out space</textarea>
+                    <textarea id="prompt-input" rows="30" placeholder="Enter your prompt here...">[nianna] in out space</textarea>
                 </div>
 
                 <div class="form-group">
@@ -1102,37 +1107,37 @@
                     <div class="prompt-assemble-row" data-category="header">
                         <label>Header</label>
                         <select onchange="onPromptPartSelect(this, 'header')"><option value="">--</option></select>
-                        <input type="text" placeholder="Header prompt...">
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Header prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('header')">Add</button>
                     </div>
                     <div class="prompt-assemble-row" data-category="characters">
                         <label>Characters</label>
                         <select onchange="onPromptPartSelect(this, 'characters')"><option value="">--</option></select>
-                        <input type="text" placeholder="Characters prompt...">
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Characters prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('characters')">Add</button>
                     </div>
                     <div class="prompt-assemble-row" data-category="outfit">
                         <label>Outfit</label>
                         <select onchange="onPromptPartSelect(this, 'outfit')"><option value="">--</option></select>
-                        <input type="text" placeholder="Outfit prompt...">
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Outfit prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('outfit')">Add</button>
                     </div>
                     <div class="prompt-assemble-row" data-category="scene">
                         <label>Scene</label>
                         <select onchange="onPromptPartSelect(this, 'scene')"><option value="">--</option></select>
-                        <input type="text" placeholder="Scene prompt...">
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Scene prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('scene')">Add</button>
                     </div>
                     <div class="prompt-assemble-row" data-category="camera">
                         <label>Camera</label>
                         <select onchange="onPromptPartSelect(this, 'camera')"><option value="">--</option></select>
-                        <input type="text" placeholder="Camera prompt...">
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Camera prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('camera')">Add</button>
                     </div>
                     <div class="prompt-assemble-row" data-category="footer">
                         <label>Footer</label>
                         <select onchange="onPromptPartSelect(this, 'footer')"><option value="">--</option></select>
-                        <input type="text" placeholder="Footer prompt...">
+                        <textarea class="prompt-assemble-text" rows="3" placeholder="Footer prompt..."></textarea>
                         <button class="btn-add" onclick="addPromptPart('footer')">Add</button>
                     </div>
                 </div>
@@ -1661,7 +1666,7 @@
 
         function onPromptPartSelect(selectEl, category) {
             const row = selectEl.closest('.prompt-assemble-row');
-            const textInput = row.querySelector('input[type="text"]');
+            const textInput = row.querySelector('textarea.prompt-assemble-text');
             const idx = selectEl.value;
             if (idx === '' || !promptPartsData[category]) {
                 textInput.value = '';
@@ -1675,7 +1680,7 @@
 
         function addPromptPart(category) {
             const row = document.querySelector(`.prompt-assemble-row[data-category="${category}"]`);
-            const textInput = row.querySelector('input[type="text"]');
+            const textInput = row.querySelector('textarea.prompt-assemble-text');
             const text = textInput.value.trim();
             if (!text) return;
             const promptArea = document.getElementById('prompt-input');
@@ -1692,7 +1697,7 @@
             const parts = [];
             categories.forEach(cat => {
                 const row = document.querySelector(`.prompt-assemble-row[data-category="${cat}"]`);
-                const textInput = row.querySelector('input[type="text"]');
+                const textInput = row.querySelector('textarea.prompt-assemble-text');
                 const text = textInput.value.trim();
                 if (text) parts.push(text);
             });
