@@ -778,23 +778,34 @@ def caption_image():
     """Submit image2text workflow and return the generated caption"""
     try:
         data = request.json
-        image_key = data.get('image', '')  # e.g. 'image2text/photo.jpg'
+        image_key = data.get('image', '')  # e.g. 'image2text/photo.jpg' (from folder)
+        temp_image = data.get('temp_image', '')  # e.g. 'pasted_image_0.png' (from upload/paste)
+        source = data.get('source', 'folder')  # 'folder', 'upload', or 'paste'
         custom_prompt = data.get('prompt', '')
 
         workflow = _load_image2text_workflow()
         if not workflow:
             return jsonify({'success': False, 'error': 'Workflow file not found: llm_qwen3_5_text_gen.json'}), 404
 
-        # Validate image path
-        if '..' in image_key or image_key.startswith('/'):
-            return jsonify({'success': False, 'error': 'Invalid image path'}), 400
-        if not image_key.startswith('image2text/'):
-            return jsonify({'success': False, 'error': 'Image must be from image2text folder'}), 400
+        if not temp_image and not image_key:
+            return jsonify({'success': False, 'error': 'No image provided'}), 400
 
-        image_filename = image_key[len('image2text/'):]
-        image_path = os.path.join(IMAGE2TEXT_DIR, image_filename)
-        if not os.path.exists(image_path):
-            return jsonify({'success': False, 'error': f'Image not found: {image_filename}'}), 404
+        # Determine which image to use
+        if temp_image:
+            image_filename = temp_image
+            image_path = os.path.join(IMAGE2TEXT_DIR, image_filename)
+            if not os.path.exists(image_path):
+                return jsonify({'success': False, 'error': f'Image not found: {image_filename}'}), 404
+        else:
+            # Validate folder image path
+            if '..' in image_key or image_key.startswith('/'):
+                return jsonify({'success': False, 'error': 'Invalid image path'}), 400
+            if not image_key.startswith('image2text/'):
+                return jsonify({'success': False, 'error': 'Image must be from image2text folder'}), 400
+            image_filename = image_key[len('image2text/'):]
+            image_path = os.path.join(IMAGE2TEXT_DIR, image_filename)
+            if not os.path.exists(image_path):
+                return jsonify({'success': False, 'error': f'Image not found: {image_filename}'}), 404
 
         # Copy image to ComfyUI's input directory so LoadImage can find it
         comfyui_input_dir = os.path.join(COMFYUI_LOCAL_PATH, 'input') if COMFYUI_LOCAL_PATH else None
@@ -804,6 +815,12 @@ def caption_image():
             try:
                 import shutil
                 shutil.copy2(image_path, dest_path)
+            except OSError:
+                try:
+                    import shutil
+                    shutil.copy(image_path, dest_path)
+                except OSError as e2:
+                    print(f"Warning: Failed to copy image to ComfyUI input: {e2}")
             except Exception as e:
                 print(f"Warning: Failed to copy image to ComfyUI input: {e}")
         else:
@@ -897,6 +914,85 @@ def caption_image():
             'image': image_filename
         })
 
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _save_to_image2text_dir(filename, data):
+    """Helper: save bytes data to image2text dir with unique filename to avoid collisions"""
+    import shutil
+    base_name = os.path.splitext(filename)[0]
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}:
+        ext = '.png'
+    safe_name = base_name.replace(' ', '_').replace('.', '_')
+    filepath = os.path.join(IMAGE2TEXT_DIR, safe_name + ext)
+
+    # Avoid collisions by appending timestamp-based suffix
+    counter = 0
+    original = filepath
+    while os.path.exists(filepath):
+        counter += 1
+        filepath = f"{original}_{counter}{ext}"
+
+    with open(filepath, 'wb') as f:
+        f.write(data)
+
+    # Copy to ComfyUI input dir too
+    if COMFYUI_LOCAL_PATH:
+        comfyui_input_dir = os.path.join(COMFYUI_LOCAL_PATH, 'input')
+        os.makedirs(comfyui_input_dir, exist_ok=True)
+        try:
+            shutil.copy2(filepath, os.path.join(comfyui_input_dir, os.path.basename(filepath)))
+        except OSError:
+            try:
+                shutil.copy(filepath, os.path.join(comfyui_input_dir, os.path.basename(filepath)))
+            except OSError as e2:
+                print(f"Warning: Failed to copy to ComfyUI input: {e2}")
+
+    return os.path.basename(filepath)
+
+
+@app.route('/api/image2text/upload', methods=['POST'])
+def upload_image2text_image():
+    """Upload an image file to the image2text folder"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+        file = request.files['file']
+        if file.filename == '' or file.filename is None:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        filename = file.filename.replace('/', '_').replace('..', '')
+        data = file.read()
+        saved_name = _save_to_image2text_dir(filename, data)
+        return jsonify({'success': True, 'filename': saved_name})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/image2text/paste', methods=['POST'])
+def paste_image2text_image():
+    """Accept a base64-encoded image from clipboard paste, save to image2text folder"""
+    try:
+        data = request.json
+        b64_data = data.get('data', '')
+        if not b64_data:
+            return jsonify({'success': False, 'error': 'No image data provided'}), 400
+        # Strip data URI prefix: data:image/png;base64,...
+        if ',' in b64_data:
+            b64_data = b64_data.split(',', 1)[1]
+        import base64
+        image_bytes = base64.b64decode(b64_data)
+        # Guess extension from MIME in the data URI prefix
+        ext = '.png'
+        if 'image/jpeg' in data.get('data', ''):
+            ext = '.jpg'
+        elif 'image/webp' in data.get('data', ''):
+            ext = '.webp'
+        elif 'image/gif' in data.get('data', ''):
+            ext = '.gif'
+        saved_name = _save_to_image2text_dir('pasted_image' + ext, image_bytes)
+        return jsonify({'success': True, 'filename': saved_name})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

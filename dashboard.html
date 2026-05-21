@@ -1324,8 +1324,18 @@
         <div id="image2text-tab" class="tab-content">
             <div class="card">
                 <h2>🖼️ Image2Text Captioning</h2>
+                <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Or upload an image</label>
+                        <input type="file" id="image2text-file-input" accept="image/*" style="font-size: 0.85em;">
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="font-size: 0.85em; color: #666; margin-bottom: 5px; display: block;">Or paste (Ctrl+V) on this tab</label>
+                        <div id="image2text-drop-zone" style="padding: 12px; border: 2px dashed #ccc; border-radius: 6px; text-align: center; color: #999; font-size: 0.85em; cursor: pointer;">Click or paste image here</div>
+                    </div>
+                </div>
                 <div class="form-group">
-                    <label for="image2text-image-select">Select Image</label>
+                    <label for="image2text-image-select">Select from Folder</label>
                     <select id="image2text-image-select" style="flex: 1;">
                         <option value="">-- Loading images... --</option>
                     </select>
@@ -3758,7 +3768,11 @@
 
         // ── Image2Text Functions ──────────────────────────────────────────────
 
+        // Track the currently loaded image (from folder, upload, or paste)
+        let currentImage2TextFile = '';
+
         async function loadImage2TextImages() {
+            currentImage2TextFile = '';
             try {
                 const res = await fetch(`${API_BASE}/api/image2text/images`);
                 const data = await res.json();
@@ -3772,6 +3786,7 @@
                     data.images.map(img => `<option value="${img.name}">${img.name} (${img.size_formatted})</option>`).join('');
 
                 sel.addEventListener('change', () => {
+                    currentImage2TextFile = sel.value;
                     const preview = document.getElementById('image2text-preview');
                     const container = document.getElementById('image2text-preview-container');
                     if (sel.value) {
@@ -3786,13 +3801,131 @@
             }
         }
 
+        function updateImage2TextPreview(filename) {
+            currentImage2TextFile = filename;
+            const preview = document.getElementById('image2text-preview');
+            const container = document.getElementById('image2text-preview-container');
+            preview.src = `${API_BASE}/api/image2text/preview/${encodeURIComponent(filename)}`;
+            container.style.display = 'block';
+            // Clear the folder select
+            document.getElementById('image2text-image-select').value = '';
+        }
+
+        async function uploadImage2TextFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const res = await fetch(`${API_BASE}/api/image2text/upload`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (!data.success) {
+                    showNotification('Upload failed: ' + data.error, 'error');
+                    return false;
+                }
+                showNotification('Image uploaded: ' + data.filename, 'success');
+                loadImage2TextImages(); // refresh the list
+                updateImage2TextPreview(data.filename);
+                return true;
+            } catch (e) {
+                showNotification('Upload failed: ' + e.message, 'error');
+                return false;
+            }
+        }
+
+        async function pasteImage2TextImage(base64Data, originalEvent) {
+            try {
+                const res = await fetch(`${API_BASE}/api/image2text/paste`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: base64Data })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showNotification('Paste failed: ' + data.error, 'error');
+                    return false;
+                }
+                showNotification('Image pasted: ' + data.filename, 'success');
+                loadImage2TextImages(); // refresh the list
+                updateImage2TextPreview(data.filename);
+                return true;
+            } catch (e) {
+                showNotification('Paste failed: ' + e.message, 'error');
+                return false;
+            }
+        }
+
+        function setupImage2TextPasteHandler() {
+            const tab = document.getElementById('image2text-tab');
+            tab.addEventListener('paste', (e) => {
+                const items = e.clipboardData.items;
+                for (let item of items) {
+                    if (item.type.startsWith('image/')) {
+                        e.preventDefault();
+                        const blob = item.getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                            pasteImage2TextImage(evt.target.result, e);
+                        };
+                        reader.readAsDataURL(blob);
+                        break;
+                    }
+                }
+            });
+
+            // Drop zone click also triggers file input
+            const dropZone = document.getElementById('image2text-drop-zone');
+            const fileInput = document.getElementById('image2text-file-input');
+
+            dropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // File input change handler
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    uploadImage2TextFile(e.target.files[0]);
+                    fileInput.value = ''; // reset so same file can be selected again
+                }
+            });
+
+            // Drag and drop on drop zone
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.style.borderColor = '#667eea';
+                dropZone.style.background = 'rgba(102, 126, 234, 0.05)';
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.style.borderColor = '#ccc';
+                dropZone.style.background = '';
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.style.borderColor = '#ccc';
+                dropZone.style.background = '';
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].type.startsWith('image/')) {
+                    uploadImage2TextFile(files[0]);
+                }
+            });
+        }
+
         async function captionImage() {
             const sel = document.getElementById('image2text-image-select');
-            const image = sel.value;
-            if (!image) {
-                showNotification('Please select an image first', 'error');
+            const folderImage = sel.value;
+
+            // Determine which image to use: folder selection takes priority if set,
+            // otherwise use uploaded/pasted image
+            let imageSource = folderImage ? 'folder' : (currentImage2TextFile ? 'custom' : '');
+            if (!imageSource) {
+                showNotification('Please select or upload an image first', 'error');
                 return;
             }
+
             const btn = document.getElementById('image2text-caption-btn');
             const resultArea = document.getElementById('image2text-result');
             btn.disabled = true;
@@ -3801,10 +3934,17 @@
 
             try {
                 const customPrompt = document.getElementById('image2text-prompt').value.trim();
+                const body = { prompt: customPrompt };
+                if (imageSource === 'folder') {
+                    body.image = 'image2text/' + folderImage;
+                } else {
+                    body.temp_image = currentImage2TextFile;
+                }
+
                 const res = await fetch(`${API_BASE}/api/image2text/caption`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: 'image2text/' + image, prompt: customPrompt })
+                    body: JSON.stringify(body)
                 });
                 const data = await res.json();
                 if (!data.success) {
@@ -3813,7 +3953,7 @@
                     return;
                 }
                 resultArea.value = data.text || '(no text generated)';
-                showNotification('Caption generated: ' + image, 'success');
+                showNotification('Caption generated: ' + (data.image || currentImage2TextFile), 'success');
             } catch (e) {
                 showNotification('Failed to generate caption: ' + e.message, 'error');
                 resultArea.value = 'Error: ' + e.message;
@@ -3822,6 +3962,11 @@
                 btn.textContent = 'Generate Caption';
             }
         }
+
+        // Initialize paste handler on DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', () => {
+            setupImage2TextPasteHandler();
+        });
     </script>
 </body>
 </html>
