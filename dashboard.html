@@ -2084,12 +2084,16 @@
                             `<button class="gallery-btn" onclick="viewWorkflow('${img.prompt_id}', event)" style="background: #667eea;">📋 Workflow</button>` :
                             `<a href="${imageUrl}" class="gallery-btn" target="_blank">🔍 View</a>`;
                         
+                        const fullImageUrl = `${API_BASE}/api/image/${img.filename}${params}`;
+                        const thumbUrl = `${fullImageUrl}&thumbnail=1`;
                         return `
                         <div class="gallery-item" data-filename="${img.filename}" data-subfolder="${img.subfolder || ''}" data-type="${img.type || 'output'}">
                             ${sourceBadge}
-                            <img src="${imageUrl}&thumbnail=1"
-                                 data-full-url="${imageUrl}"
+                            <img src="${thumbUrl}"
+                                 data-full-url="${fullImageUrl}"
                                  data-prompt-id="${img.prompt_id || ''}"
+                                 data-filename="${img.filename}"
+                                 data-subfolder="${img.subfolder || ''}"
                                  alt="Generated image"
                                  loading="lazy"
                                  class="gallery-image"
@@ -2123,22 +2127,25 @@
 
         // Setup click handlers for gallery images
         function setupImageClickHandlers() {
-            const galleryImages = document.querySelectorAll('.gallery-image');
-            
-            galleryImages.forEach(img => {
+            const activeTab = document.querySelector('.tab-content.active');
+            const galleryImages = activeTab
+                ? activeTab.querySelectorAll('.gallery-image')
+                : document.querySelectorAll('.gallery-image');
+
+            Array.from(galleryImages).forEach(img => {
                 let clickTimer = null;
-                
+
                 // Handle single click (show modal)
                 img.addEventListener('click', (e) => {
                     e.preventDefault();
-                    
+
                     // Clear any existing timer
                     if (clickTimer) {
                         clearTimeout(clickTimer);
                         clickTimer = null;
                         return;
                     }
-                    
+
                     // Set timer for single click
                     clickTimer = setTimeout(() => {
                         const index = Array.from(galleryImages).indexOf(img);
@@ -2203,9 +2210,12 @@
             const modal = document.getElementById('imageModal');
             const modalImg = document.getElementById('modalImage');
             
-            // Rebuild gallery images list
-            const galleryImages = document.querySelectorAll('.gallery-image');
-            galleryImagesList = Array.from(galleryImages);
+            // Rebuild gallery images list (scoped to active tab)
+            const activeTab = document.querySelector('.tab-content.active');
+            const galleryImages = activeTab
+                ? Array.from(activeTab.querySelectorAll('.gallery-image'))
+                : Array.from(document.querySelectorAll('.gallery-image'));
+            galleryImagesList = galleryImages;
             
             // Find index if not provided
             if (index === 0 && imageUrl) {
@@ -2279,55 +2289,110 @@
             if (galleryImagesList.length === 0 || currentImageIndex < 0 || currentImageIndex >= galleryImagesList.length) {
                 return;
             }
-            
+
             const currentImg = galleryImagesList[currentImageIndex];
             const parentItem = currentImg.closest('.gallery-item');
-            if (!parentItem) return;
-            
-            const filename = parentItem.dataset.filename;
-            const subfolder = parentItem.dataset.subfolder || '';
-            const promptId = currentImg.dataset.promptId || '';
-            
+
+            let filename = '';
+            let subfolder = '';
+            let promptId = '';
+
+            if (parentItem) {
+                filename = parentItem.dataset.filename || '';
+                subfolder = parentItem.dataset.subfolder || '';
+                promptId = currentImg.dataset.promptId || '';
+            }
+
+            // Determine source from active tab (data attributes may be set by loadGallery or renderThumbnailGallery)
+            const activeTab = document.querySelector('.tab-content.active');
+            const isGalleryTab = activeTab && (activeTab.id === 'gallery' || activeTab.querySelector('#gallery-display'));
+            const source = (isGalleryTab && filename) ? 'gallery' : 'workflow';
+
+            // Fallback: extract from data-full-url if data attributes are missing
+            if (!filename) {
+                const fullUrl = currentImg.dataset.fullUrl || '';
+                if (fullUrl) {
+                    try {
+                        const urlObj = new URL(fullUrl, window.location.origin);
+                        const pathParts = urlObj.pathname.split('/').filter(Boolean);
+                        // Workflow: /api/image/{filename}?subfolder=...&type=...
+                        // Gallery:  /api/gallery/image/{subfolder}/{filename}
+                        // Differentiate by pathParts[1]
+                        if (pathParts[1] === 'image' && pathParts[2]) {
+                            filename = decodeURIComponent(pathParts[2]);
+                            subfolder = urlObj.searchParams.get('subfolder') || '';
+                            source = 'workflow';
+                        } else if (pathParts[1] === 'gallery' && pathParts.length >= 4) {
+                            filename = decodeURIComponent(pathParts[pathParts.length - 1]);
+                            const subfolderParts = pathParts.slice(3, pathParts.length - 1);
+                            subfolder = subfolderParts.length > 0 ? decodeURIComponent(subfolderParts.join('/')) : '';
+                            source = 'gallery';
+                        }
+                    } catch (e) {
+                        // URL parsing failed, nothing we can do
+                    }
+                }
+            }
+
+            if (!filename) return;
+
             if (!confirm(`Are you sure you want to delete ${filename}?`)) {
                 return;
             }
-            
+
             try {
                 const payload = {
                     filename: filename,
                     subfolder: subfolder
                 };
-                
+
                 if (promptId) {
                     payload.prompt_id = promptId;
                 }
-                
-                const response = await fetch(`${API_BASE}/api/delete-image`, {
-                    method: 'DELETE',
+
+                // Use appropriate API based on source
+                const apiPath = (source === 'gallery')
+                    ? `${API_BASE}/api/gallery/delete`
+                    : `${API_BASE}/api/delete-image`;
+                const method = 'DELETE';
+
+                const response = await fetch(apiPath, {
+                    method: method,
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify((source === 'gallery')
+                        ? { relative_path: `${subfolder}/${filename}`.replace(/\/\//g, '/') }
+                        : payload
+                    )
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showNotification(data.message || 'Image deleted successfully', 'success');
-                    
+
                     // Store current state
                     const wasLastImage = currentImageIndex === galleryImagesList.length - 1;
                     const newIndex = wasLastImage ? Math.max(0, currentImageIndex - 1) : currentImageIndex;
-                    
-                    // Reload gallery
-                    await loadGallery();
-                    
+
+                    if (source === 'gallery') {
+                        // Gallery tab: reload gallery items (not the workflow gallery)
+                        await loadGalleryItems();
+                    } else {
+                        // Workflow tab: reload workflow gallery
+                        await loadGallery();
+                    }
+
                     // Wait a moment for gallery to refresh
                     setTimeout(() => {
-                        // Rebuild the list
-                        const galleryImages = document.querySelectorAll('.gallery-image');
-                        galleryImagesList = Array.from(galleryImages);
-                        
+                        // Rebuild the list (scoped to active tab)
+                        const activeTab = document.querySelector('.tab-content.active');
+                        const galleryImages = activeTab
+                            ? Array.from(activeTab.querySelectorAll('.gallery-image'))
+                            : Array.from(document.querySelectorAll('.gallery-image'));
+                        galleryImagesList = galleryImages;
+
                         // If there are still images, stay in modal and show the next/previous image
                         if (galleryImagesList.length > 0) {
                             currentImageIndex = Math.min(newIndex, galleryImagesList.length - 1);
@@ -3089,13 +3154,15 @@
                 const noWorkflowTag = !item.has_workflow ? 
                     `<div style="position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.6); color: #aaa; padding: 2px 6px; border-radius: 4px; font-size: 0.65em; z-index: 5; pointer-events: none;">No Workflow</div>` : '';
 
+                const subFolder = item.relative_path.split('/').slice(0, -1).join('/');
                 return `
-                <div class="gallery-item" style="position: relative;">
+                <div class="gallery-item" style="position: relative;" data-filename="${item.filename}" data-subfolder="${subFolder}">
                     ${noWorkflowTag}
-                    <img src="${imageUrl}?thumbnail=1" 
+                    <img src="${imageUrl}?thumbnail=1"
                          alt="${item.filename}"
                          class="gallery-image"
                          data-full-url="${imageUrl}"
+                         data-prompt-id=""
                          loading="lazy"
                          style="width: 100%; height: auto; border-radius: 8px; cursor: pointer;">
                     <div class="gallery-item-info">
