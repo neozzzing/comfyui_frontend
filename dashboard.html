@@ -1035,6 +1035,7 @@
             <button class="tab" onclick="switchTab('gallery')">🖼️ Gallery</button>
             <button class="tab" onclick="switchTab('history')">📜 History</button>
             <button class="tab" onclick="switchTab('editor')">📝 File Editor</button>
+            <button class="tab" onclick="switchTab('image2text')">🖼️ Image2Text</button>
         </div>
 
         <!-- Workflow Tab Content -->
@@ -1102,7 +1103,7 @@
 
             <!-- Prompt Assemble -->
             <div class="card">
-                <h2>🧩 Prompt Assemble <button onclick="reloadPromptParts()" style="font-size:0.6em;padding:2px 8px;cursor:pointer;">🔄 Reload</button> <button onclick="switchTab('editor')" style="font-size:0.6em;padding:2px 8px;cursor:pointer;" title="Open File Editor">📝 Edit</button></h2>
+                <h2>🧩 Prompt Assemble <button onclick="reloadPromptParts()" style="font-size:0.6em;padding:2px 8px;cursor:pointer;">🔄 Reload</button> <button onclick="switchTab('editor')" style="font-size:0.6em;padding:2px 8px;cursor:pointer;" title="Open File Editor">📝 Edit</button> <button onclick="switchTab('image2text')" style="font-size:0.6em;padding:2px 8px;cursor:pointer;" title="Image to Text Captioning">🖼️ Image2Text</button></h2>
                 <div id="prompt-assemble-status" style="font-size:0.8em;color:#888;margin-bottom:6px;"></div>
                 <div id="prompt-assemble-container">
                     <div class="prompt-assemble-row" data-category="header">
@@ -1318,6 +1319,39 @@
             </div>
         </div>
         <!-- End File Editor Tab -->
+
+        <!-- Image2Text Tab Content -->
+        <div id="image2text-tab" class="tab-content">
+            <div class="card">
+                <h2>🖼️ Image2Text Captioning</h2>
+                <div class="form-group">
+                    <label for="image2text-image-select">Select Image</label>
+                    <select id="image2text-image-select" style="flex: 1;">
+                        <option value="">-- Loading images... --</option>
+                    </select>
+                </div>
+                <div id="image2text-preview-container" style="display: none; margin-bottom: 15px;">
+                    <img id="image2text-preview" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 2px solid #e0e0e0;">
+                </div>
+                <div class="form-group">
+                    <label for="image2text-prompt">Caption Prompt (optional, uses default if empty)</label>
+                    <textarea id="image2text-prompt" rows="3" placeholder="Leave empty for default prompt, or write your own..." style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-family: inherit; resize: vertical;"></textarea>
+                </div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button id="image2text-caption-btn" onclick="captionImage()" style="padding: 10px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
+                        Generate Caption
+                    </button>
+                    <button onclick="copyToClipboard(document.getElementById('image2text-result').value)" style="padding: 10px 24px; background: #4caf50; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
+                        Copy Result
+                    </button>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 15px;">
+                <h2 style="margin-bottom: 15px; color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Generated Caption</h2>
+                <textarea id="image2text-result" class="history-prompt-box" readonly placeholder="Generated caption will appear here..." rows="8"></textarea>
+            </div>
+        </div>
+        <!-- End Image2Text Tab -->
 
     </div>
 
@@ -2535,7 +2569,7 @@
             document.getElementById(`${tabName}-tab`).classList.add('active');
 
             // Update page title with tab name
-            const tabLabels = { workflow: 'Workflow', gallery: 'Gallery', history: 'History', editor: 'File Editor' };
+            const tabLabels = { workflow: 'Workflow', gallery: 'Gallery', history: 'History', editor: 'File Editor', image2text: 'Image2Text' };
             const label = tabLabels[tabName] || tabName;
             document.title = `${label} - ComfyUI Dashboard`;
 
@@ -2546,6 +2580,8 @@
                 loadGalleryItems();
             } else if (tabName === 'editor') {
                 loadEditorFiles();
+            } else if (tabName === 'image2text') {
+                loadImage2TextImages();
             }
         }
 
@@ -3719,6 +3755,73 @@
                 e.returnValue = '';
             }
         });
+
+        // ── Image2Text Functions ──────────────────────────────────────────────
+
+        async function loadImage2TextImages() {
+            try {
+                const res = await fetch(`${API_BASE}/api/image2text/images`);
+                const data = await res.json();
+                if (!data.success || !data.images || data.images.length === 0) {
+                    const sel = document.getElementById('image2text-image-select');
+                    sel.innerHTML = '<option value="">-- No images found --</option>';
+                    return;
+                }
+                const sel = document.getElementById('image2text-image-select');
+                sel.innerHTML = '<option value="">-- Select an image --</option>' +
+                    data.images.map(img => `<option value="${img.name}">${img.name} (${img.size_formatted})</option>`).join('');
+
+                sel.addEventListener('change', () => {
+                    const preview = document.getElementById('image2text-preview');
+                    const container = document.getElementById('image2text-preview-container');
+                    if (sel.value) {
+                        preview.src = `${API_BASE}/api/image2text/preview/${encodeURIComponent(sel.value)}`;
+                        container.style.display = 'block';
+                    } else {
+                        container.style.display = 'none';
+                    }
+                });
+            } catch (e) {
+                document.getElementById('image2text-image-select').innerHTML = '<option value="">-- Failed to load images --</option>';
+            }
+        }
+
+        async function captionImage() {
+            const sel = document.getElementById('image2text-image-select');
+            const image = sel.value;
+            if (!image) {
+                showNotification('Please select an image first', 'error');
+                return;
+            }
+            const btn = document.getElementById('image2text-caption-btn');
+            const resultArea = document.getElementById('image2text-result');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            resultArea.value = '';
+
+            try {
+                const customPrompt = document.getElementById('image2text-prompt').value.trim();
+                const res = await fetch(`${API_BASE}/api/image2text/caption`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: 'image2text/' + image, prompt: customPrompt })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showNotification('Caption failed: ' + data.error, 'error');
+                    resultArea.value = 'Error: ' + data.error;
+                    return;
+                }
+                resultArea.value = data.text || '(no text generated)';
+                showNotification('Caption generated: ' + image, 'success');
+            } catch (e) {
+                showNotification('Failed to generate caption: ' + e.message, 'error');
+                resultArea.value = 'Error: ' + e.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Caption';
+            }
+        }
     </script>
 </body>
 </html>

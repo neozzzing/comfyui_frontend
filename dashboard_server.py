@@ -733,6 +733,195 @@ def save_editor_file(key):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ── Image2Text (Image Captioning) ────────────────────────────────────
+IMAGE2TEXT_DIR = os.path.join(_SCRIPT_DIR, 'image2text')
+IMAGE2TEXT_WORKFLOW = os.path.join(IMAGE2TEXT_DIR, 'llm_qwen3_5_text_gen.json')
+
+
+def _load_image2text_workflow():
+    """Load the image2text workflow template"""
+    if not os.path.exists(IMAGE2TEXT_WORKFLOW):
+        return None
+    with open(IMAGE2TEXT_WORKFLOW, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+@app.route('/api/image2text/images', methods=['GET'])
+def list_image2text_images():
+    """List images available in the image2text folder"""
+    try:
+        os.makedirs(IMAGE2TEXT_DIR, exist_ok=True)
+        image_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
+        images = []
+        for f in sorted(os.listdir(IMAGE2TEXT_DIR)):
+            ext = os.path.splitext(f)[1].lower()
+            if ext in image_exts:
+                filepath = os.path.join(IMAGE2TEXT_DIR, f)
+                size = os.path.getsize(filepath)
+                images.append({
+                    'name': f,
+                    'path': 'image2text/' + f,
+                    'size': size,
+                    'size_formatted': f"{size / 1024:.1f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+                })
+        return jsonify({
+            'success': True,
+            'images': images,
+            'count': len(images)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/image2text/caption', methods=['POST'])
+def caption_image():
+    """Submit image2text workflow and return the generated caption"""
+    try:
+        data = request.json
+        image_key = data.get('image', '')  # e.g. 'image2text/photo.jpg'
+        custom_prompt = data.get('prompt', '')
+
+        workflow = _load_image2text_workflow()
+        if not workflow:
+            return jsonify({'success': False, 'error': 'Workflow file not found: llm_qwen3_5_text_gen.json'}), 404
+
+        # Validate image path
+        if '..' in image_key or image_key.startswith('/'):
+            return jsonify({'success': False, 'error': 'Invalid image path'}), 400
+        if not image_key.startswith('image2text/'):
+            return jsonify({'success': False, 'error': 'Image must be from image2text folder'}), 400
+
+        image_filename = image_key[len('image2text/'):]
+        image_path = os.path.join(IMAGE2TEXT_DIR, image_filename)
+        if not os.path.exists(image_path):
+            return jsonify({'success': False, 'error': f'Image not found: {image_filename}'}), 404
+
+        # Copy image to ComfyUI's input directory so LoadImage can find it
+        comfyui_input_dir = os.path.join(COMFYUI_LOCAL_PATH, 'input') if COMFYUI_LOCAL_PATH else None
+        if comfyui_input_dir:
+            os.makedirs(comfyui_input_dir, exist_ok=True)
+            dest_path = os.path.join(comfyui_input_dir, image_filename)
+            try:
+                import shutil
+                shutil.copy2(image_path, dest_path)
+            except Exception as e:
+                print(f"Warning: Failed to copy image to ComfyUI input: {e}")
+        else:
+            return jsonify({'success': False, 'error': 'ComfyUI local path not configured (need [comfyui] local_path in config.ini)'}), 500
+
+        # Update LoadImage node with the selected image
+        found = False
+        for node_id, node_data in workflow.items():
+            if isinstance(node_data, dict) and node_data.get('class_type') == 'LoadImage':
+                workflow[node_id]['inputs']['image'] = image_filename
+                found = True
+                break
+        if not found:
+            return jsonify({'success': False, 'error': 'LoadImage node not found in workflow'}), 400
+
+        # Update TextGenerate prompt if custom prompt provided
+        if custom_prompt:
+            for node_id, node_data in workflow.items():
+                if isinstance(node_data, dict) and node_data.get('class_type') == 'TextGenerate':
+                    workflow[node_id]['inputs']['prompt'] = custom_prompt
+                    break
+
+        # Submit to ComfyUI
+        result = comfy_client.queue_prompt(workflow)
+        if not result:
+            return jsonify({'success': False, 'error': 'Failed to submit workflow to ComfyUI'}), 500
+
+        prompt_id = result.get('prompt_id')
+        if not prompt_id:
+            return jsonify({'success': False, 'error': 'No prompt_id returned'}), 500
+
+        # Poll for completion - wait for the prompt to finish
+        max_attempts = 300  # 5 minutes at 1s intervals
+        generated_text = None
+
+        for attempt in range(max_attempts):
+            time.sleep(1)
+            try:
+                hist_resp = requests.get(f"{COMFYUI_URL}/history/{prompt_id}", timeout=5)
+                if hist_resp.status_code == 200:
+                    hist = hist_resp.json()
+                    if prompt_id in hist:
+                        node_outputs = hist[prompt_id].get('outputs', {})
+                        # Look for text output in PreviewAny or TextGenerate nodes
+                        for node_id, node_out in node_outputs.items():
+                            if 'images' in node_out:
+                                # PreviewAny stores text in 'images' as gbk/binary type
+                                for img_entry in node_out['images']:
+                                    text_data = img_entry.get('filename', '')
+                                    if text_data and 'TEXT/' in text_data:
+                                        # Text output files from TextGenerate appear as TEXT/filename
+                                        pass
+                            if 'text' in node_out:
+                                text_val = node_out['text']
+                                if isinstance(text_val, list) and len(text_val) > 0:
+                                    generated_text = str(text_val[0])
+                                    break
+                                elif isinstance(text_val, str) and text_val:
+                                    generated_text = text_val
+                                    break
+                        if generated_text:
+                            break
+            except requests.exceptions.RequestException:
+                pass
+
+        if not generated_text:
+            # Try to extract text from the raw output differently
+            # TextGenerate outputs text that PreviewAny captures
+            for attempt in range(max_attempts):
+                time.sleep(1)
+                try:
+                    hist_resp = requests.get(f"{COMFYUI_URL}/history/{prompt_id}", timeout=5)
+                    if hist_resp.status_code == 200:
+                        hist = hist_resp.json()
+                        if prompt_id not in hist:
+                            # Prompt no longer in history - it completed
+                            break
+                except requests.exceptions.RequestException:
+                    break
+
+            return jsonify({
+                'success': False,
+                'error': 'Timed out waiting for text generation (5 min max)',
+                'prompt_id': prompt_id
+            }), 504
+
+        return jsonify({
+            'success': True,
+            'text': generated_text,
+            'prompt_id': prompt_id,
+            'image': image_filename
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/image2text/preview/<path:filename>', methods=['GET'])
+def preview_image2text_image(filename):
+    """Serve an image from the image2text folder for preview"""
+    # Security: prevent directory traversal
+    if '..' in filename or filename.startswith('/'):
+        return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+    filepath = os.path.join(IMAGE2TEXT_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({'success': False, 'error': 'Image not found'}), 404
+    allowed_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in allowed_exts:
+        return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+    mime_types = {
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+        '.bmp': 'image/bmp', '.gif': 'image/gif', '.tiff': 'image/tiff',
+        '.webp': 'image/webp'
+    }
+    return send_file(filepath, mimetype=mime_types.get(ext, 'image/jpeg'))
+
+
 @app.route('/api/workflow/<filename>', methods=['GET'])
 def get_workflow(filename):
     """Get a specific workflow configuration"""
