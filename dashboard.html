@@ -2942,6 +2942,25 @@
             }
         }
 
+        // Copy arbitrary text to clipboard (used by image2text Copy Result button)
+        function copyToClipboard(text) {
+            if (!text || !text.trim()) {
+                showNotification('Nothing to copy', 'error');
+                return;
+            }
+            // Primary: modern Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('Copied to clipboard', 'success');
+                }).catch((err) => {
+                    console.warn('navigator.clipboard failed, falling back:', err);
+                    copyFallback(text);
+                });
+            } else {
+                copyFallback(text);
+            }
+        }
+
         // Export workflow as JSON
         async function exportWorkflow(promptId) {
             try {

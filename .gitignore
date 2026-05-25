@@ -1,4 +1,5 @@
 config.ini
+config.ini.real
 .venv/
 __pycache__/
 dashboard_server.log
