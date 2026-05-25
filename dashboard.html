@@ -1398,7 +1398,7 @@
 
     <script>
         // Use current host for API calls (supports external access)
-       const API_BASE = window.location.origin;
+        const API_BASE = window.location.origin;
         let statusInterval = null;
 
         // Basic Auth credentials (must match dashboard auth settings)
@@ -1406,7 +1406,7 @@
         const AUTH_PASS = 'admin';
         const AUTH_HEADER = 'Basic ' + btoa(AUTH_USER + ':' + AUTH_PASS);
 
-       function authFetch(url, options = {}) {
+        function authFetch(url, options = {}) {
             const headers = { ...options.headers, 'Authorization': AUTH_HEADER };
             return fetch(url, { ...options, headers });
         }
