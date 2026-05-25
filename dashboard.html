@@ -1398,8 +1398,18 @@
 
     <script>
         // Use current host for API calls (supports external access)
-        const API_BASE = window.location.origin;
+       const API_BASE = window.location.origin;
         let statusInterval = null;
+
+        // Basic Auth credentials (must match dashboard auth settings)
+        const AUTH_USER = 'admin';
+        const AUTH_PASS = 'admin';
+        const AUTH_HEADER = 'Basic ' + btoa(AUTH_USER + ':' + AUTH_PASS);
+
+       function authFetch(url, options = {}) {
+            const headers = { ...options.headers, 'Authorization': AUTH_HEADER };
+            return fetch(url, { ...options, headers });
+        }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -1432,7 +1442,7 @@
                 loadGalleryItems();
             }
             // Fetch gallery count for tab badge
-            fetch(`${API_BASE}/api/gallery/list`).then(r => r.json()).then(data => {
+            authFetch(`${API_BASE}/api/gallery/list`).then(r => r.json()).then(data => {
                 if (data.success) updateGalleryTabCount((data.items || []).length);
             }).catch(() => {});
             
@@ -1508,7 +1518,7 @@
             btn.disabled = true;
             btn.textContent = '⏳ Freeing...';
             try {
-                const response = await fetch(`${API_BASE}/api/free`, {
+                const response = await authFetch(`${API_BASE}/api/free`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ unload_models: true, free_memory: true })
@@ -1532,7 +1542,7 @@
         let isLocalMode = false;
         async function checkLocalMode() {
             try {
-                const response = await fetch(`${API_BASE}/api/local-mode-available`);
+                const response = await authFetch(`${API_BASE}/api/local-mode-available`);
                 const data = await response.json();
                 
                 if (data.success && data.configured) {
@@ -1593,7 +1603,7 @@
                     payload.prompt_id = promptId;
                 }
                 
-                const response = await fetch(`${API_BASE}/api/delete-image`, {
+                const response = await authFetch(`${API_BASE}/api/delete-image`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1659,7 +1669,7 @@
                     seed: parseInt(document.getElementById('seed-input').value)
                 };
 
-                const response = await fetch(`${API_BASE}/api/submit`, {
+                const response = await authFetch(`${API_BASE}/api/submit`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1691,7 +1701,7 @@
                 const parts = window.__PROMPT_PARTS__;
                 if (!parts) {
                     console.warn('No inline prompt parts data found, fetching from API...');
-                    const response = await fetch(`${API_BASE}/api/prompt-parts`, {credentials: 'same-origin'});
+                    const response = await authFetch(`${API_BASE}/api/prompt-parts`, {credentials: 'same-origin'});
                     if (!response.ok) return;
                     const data = await response.json();
                     if (data.success) _applyPromptParts(data.parts);
@@ -1730,7 +1740,7 @@
 
         async function reloadPromptParts() {
             try {
-                const response = await fetch(`${API_BASE}/api/prompt-parts`, {credentials: 'same-origin'});
+                const response = await authFetch(`${API_BASE}/api/prompt-parts`, {credentials: 'same-origin'});
                 if (!response.ok) return;
                 const data = await response.json();
                 if (data.success) _applyPromptParts(data.parts);
@@ -1784,7 +1794,7 @@
         // Load available workflows
         async function loadWorkflows() {
             try {
-                const response = await fetch(`${API_BASE}/api/workflows`);
+                const response = await authFetch(`${API_BASE}/api/workflows`);
                 const data = await response.json();
                 
                 const select = document.getElementById('workflow-select');
@@ -1807,7 +1817,7 @@
             const formData = new FormData();
             formData.append('file', file);
             try {
-                const response = await fetch(`${API_BASE}/api/workflows/upload`, {
+                const response = await authFetch(`${API_BASE}/api/workflows/upload`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1829,7 +1839,7 @@
         async function loadWorkflowDefaults() {
             try {
                 const workflowFile = document.getElementById('workflow-select').value;
-                const response = await fetch(`${API_BASE}/api/workflow/${workflowFile}`);
+                const response = await authFetch(`${API_BASE}/api/workflow/${workflowFile}`);
                 const data = await response.json();
                 
                 if (data.success && data.node_info) {
@@ -1990,7 +2000,7 @@
 
         async function updateStatus() {
             try {
-                const response = await fetch(`${API_BASE}/api/status`);
+                const response = await authFetch(`${API_BASE}/api/status`);
                 const data = await response.json();
 
                 // Update system status
@@ -2041,7 +2051,7 @@
                 const localMode = document.getElementById('local-mode-checkbox')?.checked || false;
                 const endpoint = localMode ? '/api/gallery-local' : '/api/gallery';
                 
-                const response = await fetch(`${API_BASE}${endpoint}`);
+                const response = await authFetch(`${API_BASE}${endpoint}`);
                 const data = await response.json();
 
                 const grid = document.getElementById('gallery-grid');
@@ -2356,7 +2366,7 @@
                     : `${API_BASE}/api/delete-image`;
                 const method = 'DELETE';
 
-                const response = await fetch(apiPath, {
+                const response = await authFetch(apiPath, {
                     method: method,
                     headers: {
                         'Content-Type': 'application/json',
@@ -2548,7 +2558,7 @@
         // Poll server for ComfyUI logs + WebSocket events
         async function pollServerLogs() {
             try {
-                const resp = await fetch(`${API_BASE}/api/logs?after=${_lastLogSeq}&log_cursor=${_logCursor}`);
+                const resp = await authFetch(`${API_BASE}/api/logs?after=${_lastLogSeq}&log_cursor=${_logCursor}`);
                 const data = await resp.json();
                 if (!data.success) return;
                 let changed = false;
@@ -2594,7 +2604,7 @@
         // Poll server for real execution progress
         async function pollProgress() {
             try {
-                const resp = await fetch(`${API_BASE}/api/progress`);
+                const resp = await authFetch(`${API_BASE}/api/progress`);
                 const data = await resp.json();
                 const progressDiv = document.getElementById('current-job');
                 if (!progressDiv) return;
@@ -2663,7 +2673,7 @@
         // Load History Files
         async function loadHistory() {
             try {
-                const response = await fetch(`${API_BASE}/api/history`);
+                const response = await authFetch(`${API_BASE}/api/history`);
                 const data = await response.json();
 
                 const historyItems = document.getElementById('history-items');
@@ -2714,7 +2724,7 @@
                 element.classList.add('selected');
 
                 // Load the workflow file
-                const response = await fetch(`${API_BASE}/api/history/${filename}`);
+                const response = await authFetch(`${API_BASE}/api/history/${filename}`);
                 const workflow = await response.json();
 
                 // Extract prompt from workflow
@@ -2761,7 +2771,7 @@
             modal.classList.add('show');
 
             try {
-                const response = await fetch(`${API_BASE}/api/job/${promptId}`);
+                const response = await authFetch(`${API_BASE}/api/job/${promptId}`);
                 const data = await response.json();
 
                 console.log('View workflow - API response:', data);
@@ -2964,7 +2974,7 @@
         // Export workflow as JSON
         async function exportWorkflow(promptId) {
             try {
-                const response = await fetch(`${API_BASE}/api/job/${promptId}`);
+                const response = await authFetch(`${API_BASE}/api/job/${promptId}`);
                 const data = await response.json();
 
                 console.log('Export workflow - API response:', data);
@@ -3006,7 +3016,7 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE}/api/job/${promptId}`);
+                const response = await authFetch(`${API_BASE}/api/job/${promptId}`);
                 const data = await response.json();
 
                 console.log('Rerun workflow - API response:', data);
@@ -3042,7 +3052,7 @@
                 }
 
                 // Submit the workflow
-                const submitResponse = await fetch(`${API_BASE}/api/submit`, {
+                const submitResponse = await authFetch(`${API_BASE}/api/submit`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -3084,7 +3094,7 @@
         // Load gallery items
         async function loadGalleryItems() {
             try {
-                const response = await fetch(`${API_BASE}/api/gallery/list`);
+                const response = await authFetch(`${API_BASE}/api/gallery/list`);
                 const data = await response.json();
 
                 if (!data.success) {
@@ -3323,7 +3333,7 @@
                 btn.innerHTML = `📦 Storing ${stored + skipped + failed + 1}/${galleryItems.length}...`;
 
                 try {
-                    const response = await fetch(`${API_BASE}/api/gallery/store`, {
+                    const response = await authFetch(`${API_BASE}/api/gallery/store`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -3382,7 +3392,7 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE}/api/gallery/store`, {
+                const response = await authFetch(`${API_BASE}/api/gallery/store`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -3435,7 +3445,7 @@
             modal.classList.add('show');
 
             try {
-                const response = await fetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
+                const response = await authFetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
                 const data = await response.json();
 
                 console.log('Gallery workflow - API response:', data);
@@ -3560,7 +3570,7 @@
         // Export gallery workflow as JSON file
         async function exportGalleryWorkflow(relativePath) {
             try {
-                const response = await fetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
+                const response = await authFetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
                 const data = await response.json();
 
                 if (!data.success || !data.workflow) {
@@ -3589,14 +3599,14 @@
         async function feedGalleryWorkflow(relativePath) {
             if (!confirm('Copy workflow JSON to ComfyUI workflows folder?')) return;
             try {
-                const response = await fetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
+                const response = await authFetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
                 const data = await response.json();
                 if (!data.success || !data.workflow) {
                     showNotification('Failed to load workflow', 'error');
                     return;
                 }
                 const filename = relativePath.split('/').pop().replace(/\.[^.]+$/, '');
-                const saveResponse = await fetch(`${API_BASE}/api/save-workflow-local`, {
+                const saveResponse = await authFetch(`${API_BASE}/api/save-workflow-local`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ workflow: data.workflow, filename: `gallery_${filename}` })
@@ -3616,7 +3626,7 @@
         async function rerunGalleryWorkflow(relativePath) {
             if (!confirm('Re-run this workflow? A new random seed will be generated for variation.')) return;
             try {
-                const response = await fetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
+                const response = await authFetch(`${API_BASE}/api/gallery/workflow/${relativePath}`);
                 const data = await response.json();
                 if (!data.success || !data.workflow) {
                     showNotification('Failed to load workflow', 'error');
@@ -3631,7 +3641,7 @@
                         break;
                     }
                 }
-                const submitResponse = await fetch(`${API_BASE}/api/submit`, {
+                const submitResponse = await authFetch(`${API_BASE}/api/submit`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ workflow: workflow })
@@ -3671,7 +3681,7 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE}/api/gallery/delete`, {
+                const response = await authFetch(`${API_BASE}/api/gallery/delete`, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ relative_path: relativePath })
@@ -3735,7 +3745,7 @@
 
         async function loadEditorFiles() {
             try {
-                const res = await fetch('/api/editor/files');
+                const res = await authFetch('/api/editor/files');
                 const data = await res.json();
                 if (!data.success) {
                     showNotification('Failed to load file list: ' + data.error, 'error');
@@ -3784,7 +3794,7 @@
             info.textContent = '⏳ Loading...';
             content.style.opacity = '0.4';
             try {
-                const res = await fetch('/api/editor/read/' + encodeURIComponent(key));
+                const res = await authFetch('/api/editor/read/' + encodeURIComponent(key));
                 const data = await res.json();
                 if (!data.success) {
                     showNotification('Failed to read file: ' + data.error, 'error');
@@ -3824,7 +3834,7 @@
             btn.textContent = 'Saving...';
             btn.disabled = true;
             try {
-                const res = await fetch('/api/editor/save/' + encodeURIComponent(key), {
+                const res = await authFetch('/api/editor/save/' + encodeURIComponent(key), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content })
@@ -3860,7 +3870,7 @@
         async function loadImage2TextImages() {
             currentImage2TextFile = '';
             try {
-                const res = await fetch(`${API_BASE}/api/image2text/images`);
+                const res = await authFetch(`${API_BASE}/api/image2text/images`);
                 const data = await res.json();
                 if (!data.success || !data.images || data.images.length === 0) {
                     const sel = document.getElementById('image2text-image-select');
@@ -3901,7 +3911,7 @@
             const formData = new FormData();
             formData.append('file', file);
             try {
-                const res = await fetch(`${API_BASE}/api/image2text/upload`, { method: 'POST', body: formData });
+                const res = await authFetch(`${API_BASE}/api/image2text/upload`, { method: 'POST', body: formData });
                 const data = await res.json();
                 if (!data.success) {
                     showNotification('Upload failed: ' + data.error, 'error');
@@ -3919,7 +3929,7 @@
 
         async function pasteImage2TextImage(base64Data, originalEvent) {
             try {
-                const res = await fetch(`${API_BASE}/api/image2text/paste`, {
+                const res = await authFetch(`${API_BASE}/api/image2text/paste`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ data: base64Data })
@@ -4007,7 +4017,7 @@
             try {
                 btn.disabled = true;
                 btn.textContent = 'Loading...';
-                const res = await fetch(`${API_BASE}/api/image2text/workflow`);
+                const res = await authFetch(`${API_BASE}/api/image2text/workflow`);
                 if (!res.ok) {
                     throw new Error('Failed to load workflow');
                 }
@@ -4055,7 +4065,7 @@
                     body.temp_image = currentImage2TextFile;
                 }
 
-                const res = await fetch(`${API_BASE}/api/image2text/caption`, {
+                const res = await authFetch(`${API_BASE}/api/image2text/caption`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
