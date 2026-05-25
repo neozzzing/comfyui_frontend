@@ -1345,10 +1345,7 @@
                 </div>
                <div class="form-group">
                     <label for="image2text-prompt">Caption Prompt</label>
-                    <div style="display: flex; gap: 10px; align-items: flex-start;">
-                        <textarea id="image2text-prompt" rows="3" placeholder="Enter prompt or click 'Load Default Prompt'..." style="flex: 1; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-family: inherit; resize: vertical;"></textarea>
-                        <button onclick="loadDefaultPrompt()" style="padding: 10px 16px; background: #ff9800; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap; height: fit-content;">Load Default Prompt</button>
-                    </div>
+                    <textarea id="image2text-prompt" rows="3" placeholder="Loading default prompt..." style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-family: inherit; resize: vertical;"></textarea>
                 </div>
                 <div style="margin-top: 15px; display: flex; gap: 10px;">
                     <button id="image2text-caption-btn" onclick="captionImage()" style="padding: 10px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
@@ -4080,9 +4077,10 @@
             }
         }
 
-        // Initialize paste handler on DOMContentLoaded
+       // Initialize paste handler on DOMContentLoaded
         document.addEventListener('DOMContentLoaded', () => {
             setupImage2TextPasteHandler();
+            loadDefaultPrompt();
         });
     </script>
 </body>
