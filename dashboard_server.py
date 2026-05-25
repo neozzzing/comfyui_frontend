@@ -1012,10 +1012,22 @@ def preview_image2text_image(filename):
         return jsonify({'success': False, 'error': 'Invalid file type'}), 400
     mime_types = {
         '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-        '.bmp': 'image/bmp', '.gif': 'image/gif', '.tiff': 'image/tiff',
+       '.bmp': 'image/bmp', '.gif': 'image/gif', '.tiff': 'image/tiff',
         '.webp': 'image/webp'
     }
     return send_file(filepath, mimetype=mime_types.get(ext, 'image/jpeg'))
+
+
+@app.route('/api/image2text/workflow', methods=['GET'])
+def get_image2text_workflow():
+    """Serve the image2text workflow JSON file"""
+    try:
+        workflow = _load_image2text_workflow()
+        if not workflow:
+            return jsonify({'success': False, 'error': 'Workflow file not found'}), 404
+        return jsonify(workflow)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/workflow/<filename>', methods=['GET'])

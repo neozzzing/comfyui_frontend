@@ -1343,9 +1343,12 @@
                 <div id="image2text-preview-container" style="display: none; margin-bottom: 15px;">
                     <img id="image2text-preview" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 2px solid #e0e0e0;">
                 </div>
-                <div class="form-group">
-                    <label for="image2text-prompt">Caption Prompt (optional, uses default if empty)</label>
-                    <textarea id="image2text-prompt" rows="3" placeholder="Leave empty for default prompt, or write your own..." style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-family: inherit; resize: vertical;"></textarea>
+               <div class="form-group">
+                    <label for="image2text-prompt">Caption Prompt</label>
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <textarea id="image2text-prompt" rows="3" placeholder="Enter prompt or click 'Load Default Prompt'..." style="flex: 1; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-family: inherit; resize: vertical;"></textarea>
+                        <button onclick="loadDefaultPrompt()" style="padding: 10px 16px; background: #ff9800; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap; height: fit-content;">Load Default Prompt</button>
+                    </div>
                 </div>
                 <div style="margin-top: 15px; display: flex; gap: 10px;">
                     <button id="image2text-caption-btn" onclick="captionImage()" style="padding: 10px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
@@ -3988,7 +3991,7 @@
                 dropZone.style.background = '';
             });
 
-            dropZone.addEventListener('drop', (e) => {
+           dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 dropZone.style.borderColor = '#ccc';
@@ -3998,6 +4001,34 @@
                     uploadImage2TextFile(files[0]);
                 }
             });
+        }
+
+        // Load default prompt from workflow JSON
+        async function loadDefaultPrompt() {
+            const promptTextarea = document.getElementById('image2text-prompt');
+            const btn = document.getElementById('image2text-caption-btn');
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Loading...';
+                const res = await fetch(`${API_BASE}/api/image2text/workflow`);
+                if (!res.ok) {
+                    throw new Error('Failed to load workflow');
+                }
+                const workflow = await res.json();
+                // Extract prompt from node "3" (TextGenerate)
+                const textGenNode = workflow['3'];
+                if (textGenNode && textGenNode.inputs && textGenNode.inputs.prompt) {
+                    promptTextarea.value = textGenNode.inputs.prompt;
+                    showNotification('Default prompt loaded', 'success');
+                } else {
+                    showNotification('No default prompt found in workflow', 'error');
+                }
+            } catch (e) {
+                showNotification('Failed to load default prompt: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Caption';
+            }
         }
 
         async function captionImage() {
