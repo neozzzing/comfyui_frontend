@@ -1090,6 +1090,28 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="size-preset">Size Preset</label>
+                    <select id="size-preset">
+                        <!-- Square -->
+                        <optgroup label="Square">
+                            <option value="1024x1024">1024 × 1024</option>
+                        </optgroup>
+                        <!-- Landscape -->
+                        <optgroup label="Landscape">
+                            <option value="1280x720">HD (1280 × 720)</option>
+                            <option value="1920x1080">Full HD (1920 × 1080)</option>
+                            <option value="2048x1536">2K (2048 × 1536)</option>
+                        </optgroup>
+                        <!-- Portrait -->
+                        <optgroup label="Portrait">
+                            <option value="720x1280">HD Portrait (720 × 1280)</option>
+                            <option value="1080x1920">Full HD Portrait (1080 × 1920)</option>
+                            <option value="1536x2048">2K Portrait (1536 × 2048)</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label for="seed-input">Seed</label>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <input type="number" id="seed-input" value="0" min="0" max="4294967295" style="flex: 1;">
@@ -1666,7 +1688,9 @@
                         }
                         return prefix;
                     })(),
-                    seed: parseInt(document.getElementById('seed-input').value)
+                    seed: parseInt(document.getElementById('seed-input').value),
+                    width: (() => { const s = document.getElementById('size-preset').value.split('x'); return parseInt(s[0]); })(),
+                    height: (() => { const s = document.getElementById('size-preset').value.split('x'); return parseInt(s[1]); })()
                 };
 
                 const response = await authFetch(`${API_BASE}/api/submit`, {
@@ -1865,6 +1889,14 @@
                     if (nodeInfo.batch_size) {
                         document.getElementById('batch-number').value = nodeInfo.batch_size.value;
                     }
+
+                    // Load width/height from latent image node
+                    if (nodeInfo.width && nodeInfo.height) {
+                        const presetVal = `${nodeInfo.width.value}x${nodeInfo.height.value}`;
+                        const sel = document.getElementById('size-preset');
+                        const opt = sel.querySelector(`option[value="${presetVal}"]`);
+                        if (opt) sel.value = presetVal;
+                    }
                     
                     // Display node information
                     displayNodeInfo(nodeInfo);
@@ -1901,6 +1933,10 @@
             if (nodeInfo.batch_size) {
                 html += `<div>• <strong>Batch:</strong> Node ${nodeInfo.batch_size.node_id} (${nodeInfo.batch_size.title})</div>`;
             }
+
+            if (nodeInfo.width && nodeInfo.height) {
+                html += `<div>• <strong>Size:</strong> Node ${nodeInfo.width.node_id} (${nodeInfo.width.title}) — ${nodeInfo.width.value}×${nodeInfo.height.value}</div>`;
+            }
             
             html += '</div>';
             content.innerHTML = html;
@@ -1933,7 +1969,9 @@
                 filenamePrefix: document.getElementById('filename-prefix').value,
                 appendDatetime: document.getElementById('append-datetime').checked,
                 seed: document.getElementById('seed-input').value,
-                randomSeed: document.getElementById('random-seed').checked
+                randomSeed: document.getElementById('random-seed').checked,
+                width: (() => { const s = document.getElementById('size-preset').value.split('x'); return parseInt(s[0]); })(),
+                height: (() => { const s = document.getElementById('size-preset').value.split('x'); return parseInt(s[1]); })()
             };
             localStorage.setItem('comfyui_dashboard_settings', JSON.stringify(settings));
         }
@@ -1980,6 +2018,14 @@
                         document.getElementById('seed-input').value = settings.seed;
                         document.getElementById('seed-input').disabled = false;
                         document.getElementById('seed-input').style.backgroundColor = '';
+                    }
+
+                    // Restore size settings
+                    if (settings.width && settings.height) {
+                        const presetVal = `${settings.width}x${settings.height}`;
+                        const sel = document.getElementById('size-preset');
+                        const opt = sel.querySelector(`option[value="${presetVal}"]`);
+                        if (opt) sel.value = presetVal;
                     }
                 } else {
                     // First time loading, get defaults from workflow
@@ -3039,6 +3085,8 @@
 
                 // Update seed in workflow - find KSampler node
                 const workflow = data.workflow;
+                const sizeValues = document.getElementById('size-preset').value.split('x').map(Number);
+                const newWidth = sizeValues[0], newHeight = sizeValues[1];
                 if (workflow && typeof workflow === 'object') {
                     for (const nodeId in workflow) {
                         const node = workflow[nodeId];
@@ -3046,6 +3094,12 @@
                             const oldSeed = node.inputs.seed;
                             node.inputs.seed = newSeed;
                             console.log(`Updated seed: ${oldSeed} → ${newSeed}`);
+                            break;
+                        }
+                        // Update width/height on latent image node
+                        if (node.class_type && node.class_type.startsWith('Empty') && 'LatentImage' in node.class_type && node.inputs && ('width' in node.inputs || 'height' in node.inputs)) {
+                            node.inputs.width = newWidth;
+                            node.inputs.height = newHeight;
                             break;
                         }
                     }
@@ -3634,10 +3688,18 @@
                 }
                 const workflow = data.workflow;
                 const newSeed = Math.floor(Math.random() * 1000000000000000);
+                const sizeValues = document.getElementById('size-preset').value.split('x').map(Number);
+                const newWidth = sizeValues[0], newHeight = sizeValues[1];
                 for (const nodeId in workflow) {
                     const node = workflow[nodeId];
                     if (node.class_type === 'KSampler' && node.inputs && 'seed' in node.inputs) {
                         node.inputs.seed = newSeed;
+                        break;
+                    }
+                    // Update width/height on latent image node
+                    if (node.class_type && node.class_type.startsWith('Empty') && 'LatentImage' in node.class_type && node.inputs && ('width' in node.inputs || 'height' in node.inputs)) {
+                        node.inputs.width = newWidth;
+                        node.inputs.height = newHeight;
                         break;
                     }
                 }

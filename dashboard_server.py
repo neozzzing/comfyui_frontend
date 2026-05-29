@@ -1082,6 +1082,25 @@ def get_workflow(filename):
                 'title': batch_node.get('_meta', {}).get('title', 'Empty Latent Image'),
                 'value': batch_node['inputs'].get('batch_size', 1)
             }
+
+        # Find width/height from latent image nodes (EmptySD3LatentImage, EmptySDXLLatentImage, etc.)
+        if not batch_node_id:
+            for node_id, node_data in workflow.items():
+                if isinstance(node_data, dict):
+                    ct = node_data.get('class_type', '')
+                    if ct.startswith('Empty') and ct.endswith('LatentImage') and ct != 'EmptyLatentImage':
+                        if 'inputs' in node_data and ('width' in node_data['inputs'] or 'height' in node_data['inputs']):
+                            node_info['width'] = {
+                                'node_id': node_id,
+                                'title': node_data.get('_meta', {}).get('title', ct),
+                                'value': node_data['inputs'].get('width', 1024)
+                            }
+                            node_info['height'] = {
+                                'node_id': node_id,
+                                'title': node_info['width']['title'],
+                                'value': node_data['inputs'].get('height', 1024)
+                            }
+                            break
         
         return jsonify({
             "success": True,
@@ -1127,7 +1146,23 @@ def submit_workflow():
                 json.dump(workflow, f, indent=2)
             logging.info(f"Workflow saved to history: {history_path}")
 
-            # For direct workflow submission, skip modifications
+            # Apply width/height if provided (same logic as file-based path)
+            width = data.get('width')
+            height = data.get('height')
+            if width is not None or height is not None:
+                for node_id, node_data in workflow.items():
+                    if isinstance(node_data, dict):
+                        ct = node_data.get('class_type', '')
+                        if ct.startswith('Empty') and 'LatentImage' in ct:
+                            has_dims = 'inputs' in node_data and ('width' in node_data['inputs'] or 'height' in node_data['inputs'])
+                            if has_dims:
+                                if width is not None:
+                                    workflow[node_id]["inputs"]["width"] = width
+                                if height is not None:
+                                    workflow[node_id]["inputs"]["height"] = height
+                                break
+
+            # For direct workflow submission, skip other modifications
             result = comfy_client.queue_prompt(workflow)
             
             if result:
@@ -1148,6 +1183,8 @@ def submit_workflow():
         prompt_text = data.get('prompt', '')
         batch_size = data.get('batch_size', 1)
         filename_prefix = data.get('filename_prefix', 'comfyui_')
+        width = data.get('width')
+        height = data.get('height')
         seed = data.get('seed', int(time.time() * 1000) % 4294967295)
         
         # Load workflow
@@ -1166,8 +1203,20 @@ def submit_workflow():
         batch_node_id, batch_node = find_node_by_class(workflow, 'EmptyLatentImage', 'batch_size')
         if batch_node_id:
             workflow[batch_node_id]["inputs"]["batch_size"] = batch_size
-        
-        # Update filename prefix - find SaveImage node
+
+        # Update width/height - find latent image node with width/height inputs
+        if width is not None or height is not None:
+            for node_id, node_data in workflow.items():
+                if isinstance(node_data, dict):
+                    ct = node_data.get('class_type', '')
+                    if ct.startswith('Empty') and 'LatentImage' in ct:
+                        has_dims = 'inputs' in node_data and ('width' in node_data['inputs'] or 'height' in node_data['inputs'])
+                        if has_dims:
+                            if width is not None:
+                                workflow[node_id]["inputs"]["width"] = width
+                            if height is not None:
+                                workflow[node_id]["inputs"]["height"] = height
+                            break
         save_node_id, save_node = find_node_by_class(workflow, 'SaveImage', 'filename_prefix')
         if save_node_id:
             workflow[save_node_id]["inputs"]["filename_prefix"] = filename_prefix
